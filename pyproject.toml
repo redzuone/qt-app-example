@@ -6,6 +6,8 @@ readme = "README.md"
 requires-python = "==3.14.0"
 dependencies = [
     "pyqt6==6.10.2",
+    "pyqt6-webengine==6.10.0",
+    "uvicorn==0.41.0",
 ]
 
 [dependency-groups]

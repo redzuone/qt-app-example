@@ -13,7 +13,7 @@ from app.views.toolbar import ToolBar
 class MainWindow(QMainWindow):
     """Main application window."""
 
-    def __init__(self) -> None:
+    def __init__(self, map_url: str) -> None:
         super().__init__()
         self.setWindowTitle('PyQt Example')
         central = QWidget()
@@ -25,7 +25,7 @@ class MainWindow(QMainWindow):
         self._create_tool_bar()
 
         self.table_view = TableView()
-        self.map_view = MapView()
+        self.map_view = MapView(map_url=map_url)
 
         content_layout = QHBoxLayout()
 
