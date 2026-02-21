@@ -15,7 +15,7 @@ class MainWindow(QMainWindow):
 
     def __init__(self, map_url: str) -> None:
         super().__init__()
-        self.setWindowTitle('PyQt Example')
+        self.setWindowTitle('Qt Example')
         central = QWidget()
         self.setCentralWidget(central)
         layout = QVBoxLayout(central)
