@@ -1,7 +1,7 @@
 import logging
 import sys
 
-import qt_themes
+import qt_themes  # type: ignore[import-untyped]
 from PySide6.QtWidgets import QApplication
 
 from app.controllers.app_controller import AppController
