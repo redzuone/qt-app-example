@@ -1,3 +1,4 @@
+import logging
 import sys
 
 import qt_themes
@@ -10,6 +11,11 @@ from app.views.main_window import MainWindow
 
 
 def main() -> None:
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s | %(levelname)s | %(name)s | %(message)s',
+    )
+
     app = QApplication(sys.argv)
     qt_themes.set_theme('nord')
     map_service = MapService()
