@@ -1,5 +1,6 @@
 import sys
 
+import qt_themes
 from PyQt6.QtWidgets import QApplication
 
 from app.controllers.app_controller import AppController
@@ -10,6 +11,7 @@ from app.views.main_window import MainWindow
 
 def main() -> None:
     app = QApplication(sys.argv)
+    qt_themes.set_theme('nord')
     map_service = MapService()
     map_service.start()
     app.aboutToQuit.connect(map_service.stop)
