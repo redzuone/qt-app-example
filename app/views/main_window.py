@@ -1,3 +1,4 @@
+from PySide6.QtGui import QAction, QCloseEvent
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QMainWindow,
@@ -6,6 +7,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.views.map_view import MapView
+from app.views.simulator_view import SimulatorView
 from app.views.table_view import TableView
 from app.views.toolbar import ToolBar
 
@@ -20,12 +22,16 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(central)
         layout = QVBoxLayout(central)
 
+        self._aux_windows: list[QWidget] = []
+
         self._create_menu_bar()
         self._create_status_bar()
         self._create_tool_bar()
 
         self.table_view = TableView()
         self.map_view = MapView(map_url=map_url)
+        self.simulator_view = SimulatorView()
+        self.register_aux_window(self.simulator_view)
 
         content_layout = QHBoxLayout()
 
@@ -40,7 +46,24 @@ class MainWindow(QMainWindow):
         file_menu.addAction('Exit', self.close)
 
         debug_menu = self.menu_bar.addMenu('Debug')
-        debug_menu.addAction('Test')
+        self.simulator_action = QAction('Show Simulator', self)
+        self.simulator_action.triggered.connect(lambda: self._show_view(self.simulator_view))
+        debug_menu.addAction(self.simulator_action)
+
+    def _show_view(self, view: QWidget) -> None:
+        view.showNormal()
+        view.raise_()
+        view.activateWindow()
+
+    def register_aux_window(self, window: QWidget) -> None:
+        if window not in self._aux_windows:
+            self._aux_windows.append(window)
+
+    def closeEvent(self, event: QCloseEvent) -> None:
+        for window in self._aux_windows:
+            if window.isVisible():
+                window.close()
+        super().closeEvent(event)
 
     def _create_status_bar(self) -> None:
         self.status_bar = self.statusBar()
