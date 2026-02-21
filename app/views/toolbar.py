@@ -1,5 +1,5 @@
-from PyQt6.QtGui import QAction
-from PyQt6.QtWidgets import QStyle, QToolBar
+from PySide6.QtGui import QAction
+from PySide6.QtWidgets import QStyle, QToolBar
 
 
 class ToolBar(QToolBar):
@@ -13,7 +13,6 @@ class ToolBar(QToolBar):
 
     def _add_dummy_actions(self) -> None:
         style = self.style()
-        assert style is not None
 
         new_action = QAction(
             style.standardIcon(QStyle.StandardPixmap.SP_FileIcon),

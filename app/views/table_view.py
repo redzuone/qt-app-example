@@ -1,11 +1,10 @@
-from PyQt6.QtWidgets import QTableWidget, QTableWidgetItem
+from PySide6.QtWidgets import QTableWidget, QTableWidgetItem
 
 
 class TableView(QTableWidget):
     def __init__(self, rows: int = 5, columns: int = 3) -> None:
         super().__init__(rows, columns)
         header = self.horizontalHeader()
-        assert header is not None
         header.setSectionsMovable(True)
         self.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)

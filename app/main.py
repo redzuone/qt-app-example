@@ -1,7 +1,7 @@
 import sys
 
 import qt_themes
-from PyQt6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication
 
 from app.controllers.app_controller import AppController
 from app.models.app_model import AppModel
