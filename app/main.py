@@ -1,12 +1,13 @@
 import logging
 import sys
 
-import qt_themes
+import qt_themes  # type: ignore[import-untyped]
 from PySide6.QtWidgets import QApplication
 
 from app.controllers.app_controller import AppController
 from app.models.app_model import AppModel
 from app.services.map_service import MapService
+from app.services.simulator_service import SimulatorService
 from app.views.main_window import MainWindow
 
 
@@ -22,9 +23,16 @@ def main() -> None:
     map_service.start()
     app.aboutToQuit.connect(map_service.stop)
 
+    simulator_service = SimulatorService()
+    app.aboutToQuit.connect(simulator_service.stop_all)
+
     model = AppModel()
     view = MainWindow(map_url=map_service.map_url)
-    controller = AppController(model=model, view=view)
+    _controller = AppController(
+        model=model,
+        view=view,
+        simulator_service=simulator_service,
+    )
     view.show()
     sys.exit(app.exec())
 
