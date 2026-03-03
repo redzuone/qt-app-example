@@ -6,6 +6,7 @@ from PySide6.QtWidgets import QApplication
 
 from app.controllers.app_controller import AppController
 from app.models.app_model import AppModel
+from app.services.data_store import DataStore
 from app.services.map_service import MapService
 from app.services.simulator_service import SimulatorService
 from app.utils.windows_title_bar import apply_windows_dark_style
@@ -29,8 +30,10 @@ def main() -> None:
 
     model = AppModel()
     view = MainWindow(map_url=map_service.map_url)
+    data_store = DataStore()
     apply_windows_dark_style(view)
     _controller = AppController(
+        data_store=data_store,
         model=model,
         view=view,
         simulator_service=simulator_service,

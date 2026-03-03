@@ -2,6 +2,7 @@ import logging
 from typing import Any
 
 from app.models.app_model import AppModel
+from app.services.data_store import DataStore
 from app.services.simulator_service import SimulatorService
 from app.views.main_window import MainWindow
 
@@ -11,10 +12,12 @@ logger = logging.getLogger(__name__)
 class AppController:
     def __init__(
         self,
+        data_store: DataStore,
         model: AppModel,
         view: MainWindow,
         simulator_service: SimulatorService | None = None,
     ):
+        self._data_store = data_store
         self._model = model
         self._view = view
         self._simulator_service = simulator_service
@@ -44,4 +47,4 @@ class AppController:
         simulator_service.new_raw_data.connect(self._handle_raw_data)
 
     def _handle_raw_data(self, payload: dict[str, Any]) -> None:
-        logger.info('simulator raw data: %s', payload)
+        self._data_store.add_data(payload)
