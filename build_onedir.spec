@@ -7,7 +7,7 @@ qt_themes_datas = collect_data_files('qt_themes')
 
 
 a = Analysis(
-    ['app\\main.py'],
+    ['app/main.py'],
     pathex=[],
     binaries=[],
     datas=[
