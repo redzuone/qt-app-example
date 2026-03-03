@@ -8,6 +8,7 @@ from app.controllers.app_controller import AppController
 from app.models.app_model import AppModel
 from app.services.map_service import MapService
 from app.services.simulator_service import SimulatorService
+from app.utils.windows_title_bar import apply_windows_dark_style
 from app.views.main_window import MainWindow
 
 
@@ -28,6 +29,7 @@ def main() -> None:
 
     model = AppModel()
     view = MainWindow(map_url=map_service.map_url)
+    apply_windows_dark_style(view)
     _controller = AppController(
         model=model,
         view=view,
