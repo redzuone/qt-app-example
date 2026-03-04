@@ -7,7 +7,7 @@ class MapView(QWidget):
 
     def __init__(self, map_url: str) -> None:
         super().__init__()
-        self.setMinimumSize(400, 400)
+        self.setMinimumSize(200, 200)
 
         layout = QVBoxLayout(self)
         self._web_view = QWebEngineView(self)

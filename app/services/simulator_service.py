@@ -5,6 +5,8 @@ from typing import Any
 
 from PySide6.QtCore import QObject, QTimer, Signal, Slot
 
+from app.constants.data_schema import SCHEMA
+
 
 @dataclass
 class _TargetState:
@@ -73,12 +75,11 @@ class SimulatorService(QObject):
 
 			self.new_raw_data.emit(
 				{
-					'type': 'raw_data',
-					'target_id': target_state.target_id,
-					'target_name': target_state.target_name,
-					'latitude': target_state.latitude,
-					'longitude': target_state.longitude,
-					'static': target_state.static,
-					'timestamp': datetime.now(UTC).isoformat(),
+					SCHEMA.TYPE: 'raw_data',
+					SCHEMA.TARGET_ID: target_state.target_id,
+					SCHEMA.TARGET_NAME: target_state.target_name,
+					SCHEMA.LATITUDE: target_state.latitude,
+					SCHEMA.LONGITUDE: target_state.longitude,
+					SCHEMA.DATETIME: datetime.now(UTC).isoformat(),
 				}
 			)
