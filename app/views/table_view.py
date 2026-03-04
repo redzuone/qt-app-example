@@ -1,9 +1,11 @@
 import polars as pl
 from PySide6.QtCore import QPoint, Qt, Signal
+from PySide6.QtGui import QColor
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import QMenu, QTableWidget, QTableWidgetItem
 
 from app.constants.data_schema import SCHEMA
+from app.utils.target_color import target_color_hex, target_text_color_hex
 
 
 class TableView(QTableWidget):
@@ -46,14 +48,21 @@ class TableView(QTableWidget):
 
         latitude_idx = df.columns.index(SCHEMA.LATITUDE)
         longitude_idx = df.columns.index(SCHEMA.LONGITUDE)
+        target_id_idx = df.columns.index(SCHEMA.TARGET_ID) if SCHEMA.TARGET_ID in df.columns else None
         
         for row_idx, row in enumerate(df.iter_rows()):
+            row_target_id = row[target_id_idx] if target_id_idx is not None else None
+            row_color = target_color_hex(str(row_target_id) if row_target_id is not None else None)
+            row_text_color = target_text_color_hex(row_color)
             for col_idx, value in enumerate(row):
                 if value is None:
                     value = ''
                 elif col_idx == latitude_idx or col_idx == longitude_idx:
                     value = f'{value:.6f}'
                 item = QTableWidgetItem(str(value))
+                if target_id_idx is not None and col_idx == target_id_idx:
+                    item.setBackground(QColor(row_color))
+                    item.setForeground(QColor(row_text_color))
                 self.setItem(row_idx, col_idx, item)
 
     def _get_column_index(self, schema_key: str) -> int | None:

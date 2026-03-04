@@ -2,10 +2,11 @@ from typing import Any
 
 import polars as pl
 from PySide6.QtCore import QPoint, Qt, Signal
-from PySide6.QtGui import QAction
+from PySide6.QtGui import QAction, QColor
 from PySide6.QtWidgets import QHeaderView, QMenu, QTreeWidget, QTreeWidgetItem
 
 from app.constants.data_schema import SCHEMA
+from app.utils.target_color import target_color_hex, target_text_color_hex
 
 
 class TreeView(QTreeWidget):
@@ -58,6 +59,7 @@ class TreeView(QTreeWidget):
             self._item_by_id.clear()
             return
         df = df.sort(SCHEMA.DATETIME, descending=False)
+        target_id_col = self._get_column_index(SCHEMA.TARGET_ID)
 
         # Store current selection before modifying tree
         selected_target_id, selected_child_index = self._store_selection()
@@ -79,6 +81,11 @@ class TreeView(QTreeWidget):
             parent_item.setText(0, target_name)
             parent_item.setText(1, target_id)
             parent_item.setText(2, str(datetime_val))
+            if target_id_col is not None:
+                bg_color = target_color_hex(target_id)
+                fg_color = target_text_color_hex(bg_color)
+                parent_item.setBackground(target_id_col, QColor(bg_color))
+                parent_item.setForeground(target_id_col, QColor(fg_color))
 
             # Save expanded state before rebuilding children
             expanded = parent_item.isExpanded()

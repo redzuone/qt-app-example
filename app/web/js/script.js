@@ -131,7 +131,7 @@ function initializeRealtimeLayer() {
             pointToLayer: function (feature, latlng) {
                 return L.circleMarker(latlng, {
                     radius: 6,
-                    fillColor: getTargetColor(feature.properties.type),
+                    fillColor: getTargetColor(feature.properties),
                     color: '#000',
                     weight: 1,
                     opacity: 1,
@@ -152,6 +152,7 @@ function initializeRealtimeLayer() {
         Object.values(e.update).forEach(function (feature) {
             const layer = realtimeLayer.getLayer(feature.properties.target_id);
             if (layer) {
+                layer.setStyle({ fillColor: getTargetColor(feature.properties) });
                 updatePopupContent(feature, layer);
             }
         });
@@ -174,11 +175,11 @@ function updatePopupContent(feature, layer) {
     layer.bindPopup(popupContent);
 }
 
-function getTargetColor(type) {
-    const colors = {
-        'default': '#FFA07A',
-    };
-    return colors[type] || colors['default'];
+function getTargetColor(properties) {
+    if (properties && properties.color) {
+        return properties.color;
+    }
+    return '#FFA07A';
 }
 
 function focusTarget(data) {

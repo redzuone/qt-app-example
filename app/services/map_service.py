@@ -7,6 +7,7 @@ import polars as pl
 
 from app.constants.data_schema import SCHEMA
 from app.services.api import ThreadedUvicornServer
+from app.utils.target_color import target_color_hex
 
 IncomingMapMessageHandler = Callable[[int, dict[str, Any]], None]
 
@@ -94,6 +95,7 @@ class MapService:
                         'target_id': record.get(SCHEMA.TARGET_ID),
                         'target_name': record.get(SCHEMA.TARGET_NAME),
                         'type': record.get(SCHEMA.TYPE),
+                        'color': target_color_hex(record.get(SCHEMA.TARGET_ID)),
                         'datetime': datetime_str,
                         'height': record.get(SCHEMA.HEIGHT),
                         'speed': record.get(SCHEMA.SPEED),
