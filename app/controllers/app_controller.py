@@ -1,6 +1,7 @@
 import logging
 from typing import Any
 
+from app.constants.data_schema import SCHEMA
 from app.models.app_model import AppModel
 from app.services.data_store import DataStore
 from app.services.map_service import MapService
@@ -30,6 +31,7 @@ class AppController:
             self._connect_simulator()
         if self._data_store is not None:
             self._connect_data_store()
+        self._connect_table_view()
 
     def _connect_simulator(self) -> None:
         simulator_service = self._simulator_service
@@ -59,6 +61,29 @@ class AppController:
         self._view.table_view.delete_target_by_id.connect(
             self._data_store.delete_target
         )
+
+    def _connect_table_view(self) -> None:
+        '''Connect table view signals'''
+        self._view.table_view.view_target_on_map.connect(self._on_view_target_on_map)
+
+    def _on_view_target_on_map(self, target_id: str) -> None:
+        '''Handle view target on map request'''
+        if self._map_service is None or self._data_store is None:
+            return
+
+        latest_row = self._data_store.get_latest_for_target(target_id)
+        if latest_row is None:
+            logger.warning(f'No data found for target {target_id}')
+            return
+ 
+        latitude = latest_row.get(SCHEMA.LATITUDE)
+        longitude = latest_row.get(SCHEMA.LONGITUDE)
+
+        if latitude is None or longitude is None:
+            logger.warning(f'Missing coordinates for target {target_id}')
+            return
+
+        self._map_service.focus_target(target_id, latitude, longitude)
 
     def _handle_raw_data(self, payload: dict[str, Any]) -> None:
         self._data_store.add_data(payload)

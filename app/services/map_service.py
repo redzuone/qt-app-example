@@ -41,6 +41,24 @@ class MapService:
         }
         return self.send_json(payload=payload, timeout_seconds=timeout_seconds)
 
+    def focus_target(self, target_id: str, latitude: float, longitude: float) -> None:
+        """Focus/center map on a specific target.
+        
+        Args:
+            target_id: The target ID to focus on
+            latitude: Latitude coordinate
+            longitude: Longitude coordinate
+            
+        Returns:
+            The command ID
+        """
+        data = {
+            'target_id': target_id,
+            'latitude': latitude,
+            'longitude': longitude,
+        }
+        self.send_cmd(command='focus_target', data=data)
+
     def set_web_message_handler(
         self, handler: IncomingMapMessageHandler | None
     ) -> None:

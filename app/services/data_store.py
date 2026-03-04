@@ -67,10 +67,18 @@ class DataStore(QObject):
             (pl.col(SCHEMA.DATETIME) >= start) & (pl.col(SCHEMA.DATETIME) <= end)
         )
 
-    def filter_by_target(self, target_id: int) -> pl.DataFrame:
+    def filter_by_target(self, target_id: str) -> pl.DataFrame:
         """Get all data for specific target"""
         self._flush_batch()
         return self._df.filter(pl.col(SCHEMA.TARGET_ID) == target_id)
+
+    def get_latest_for_target(self, target_id: str) -> dict[str, Any] | None:
+        """Get the most recent row for a specific target."""
+        target_df = self.filter_by_target(target_id)
+        if target_df.is_empty():
+            return None
+        latest_row = target_df.sort(SCHEMA.DATETIME, descending=False).row(-1, named=True)
+        return latest_row
 
     def get_latest_per_target(self) -> pl.DataFrame:
         """Get most recent data for each target"""

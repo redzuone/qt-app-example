@@ -8,6 +8,7 @@ from app.constants.data_schema import SCHEMA
 
 class TableView(QTableWidget):
     delete_target_by_id = Signal(str)
+    view_target_on_map = Signal(str)
     
     COLUMN_LABELS = {
         SCHEMA.DATETIME: 'Date/Time',
@@ -73,6 +74,10 @@ class TableView(QTableWidget):
             return
 
         menu = QMenu(self)
+        view_map_action = QAction('View on Map', self)
+        view_map_action.triggered.connect(self._on_view_on_map)
+        menu.addAction(view_map_action)
+        
         delete_action = QAction('Delete Target', self)
         delete_action.triggered.connect(self._on_delete_target)
         menu.addAction(delete_action)
@@ -80,6 +85,21 @@ class TableView(QTableWidget):
         # Show menu at cursor position
         menu.exec(self.viewport().mapToGlobal(position))
 
+    def _on_view_on_map(self) -> None:
+        '''Handle view on map action'''
+        current_row = self.currentRow()
+        if current_row < 0:
+            return
+        
+        target_id_col = self._get_column_index(SCHEMA.TARGET_ID)
+        if target_id_col is None:
+            return
+        
+        target_id_item = self.item(current_row, target_id_col)
+        if target_id_item:
+            target_id = target_id_item.text()
+            self.view_target_on_map.emit(target_id)
+    
     def _on_delete_target(self) -> None:
         '''Handle delete target action'''
         current_row = self.currentRow()

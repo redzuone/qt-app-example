@@ -57,6 +57,10 @@ function connectHeartbeatSocket() {
                     updateTargetMarkers(message.data);
                 }
                 
+                if (message.command === 'focus_target' && message.data) {
+                    focusTarget(message.data);
+                }
+                
                 sendWsJson({
                     type: 'cmd_ack',
                     command: message.command,
@@ -175,6 +179,16 @@ function getTargetColor(type) {
         'default': '#FFA07A',
     };
     return colors[type] || colors['default'];
+}
+
+function focusTarget(data) {
+    const lat = Number(data?.latitude);
+    const lng = Number(data?.longitude);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+        console.warn('Invalid focus_target data', data);
+        return;
+    }
+    map.setView([lat, lng], 14);
 }
 
 map.on('zoomend', function () {
