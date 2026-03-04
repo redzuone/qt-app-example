@@ -24,6 +24,8 @@ class AppController:
 
         if self._simulator_service is not None:
             self._connect_simulator()
+        if self._data_store is not None:
+            self._connect_data_store()
 
     def _connect_simulator(self) -> None:
         simulator_service = self._simulator_service
@@ -46,5 +48,14 @@ class AppController:
         )
         simulator_service.new_raw_data.connect(self._handle_raw_data)
 
+    def _connect_data_store(self) -> None:
+        data_store = self._data_store
+        data_store.data_updated.connect(self._handle_data_updated)
+
     def _handle_raw_data(self, payload: dict[str, Any]) -> None:
         self._data_store.add_data(payload)
+
+    def _handle_data_updated(self) -> None:
+        '''Handle updates from data store'''
+        latest_df = self._data_store.get_latest_per_target()
+        self._view.update_table(latest_df)

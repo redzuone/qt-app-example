@@ -1,3 +1,4 @@
+import polars as pl
 from PySide6.QtGui import QAction, QCloseEvent
 from PySide6.QtWidgets import (
     QHBoxLayout,
@@ -71,3 +72,6 @@ class MainWindow(QMainWindow):
     def _create_tool_bar(self) -> None:
         self.tool_bar = ToolBar()
         self.addToolBar(self.tool_bar)
+
+    def update_table(self, df: pl.DataFrame) -> None:
+        self.table_view.update_table(df)
