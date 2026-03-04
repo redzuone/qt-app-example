@@ -32,6 +32,7 @@ class AppController:
         if self._data_store is not None:
             self._connect_data_store()
         self._connect_table_view()
+        self._connect_tree_view()
 
     def _connect_simulator(self) -> None:
         simulator_service = self._simulator_service
@@ -66,6 +67,16 @@ class AppController:
         '''Connect table view signals'''
         self._view.table_view.view_target_on_map.connect(self._on_view_target_on_map)
 
+    def _connect_tree_view(self) -> None:
+        '''Connect tree view signals'''
+        tree_view = self._view.tree_view
+        if tree_view is None:
+            return
+        tree_view.view_target_on_map.connect(self._on_view_target_on_map)
+        tree_view.delete_target_by_id.connect(
+            self._data_store.delete_target
+        )
+
     def _on_view_target_on_map(self, target_id: str) -> None:
         '''Handle view target on map request'''
         if self._map_service is None or self._data_store is None:
@@ -92,5 +103,7 @@ class AppController:
         '''Handle updates from data store'''
         latest_df = self._data_store.get_latest_per_target()
         self._view.update_table(latest_df)
+        if self._view.tree_view is not None:
+            self._view.tree_view.update_tree(latest_df)
         if self._map_service is not None:
             self._map_service.update_targets(latest_df)
