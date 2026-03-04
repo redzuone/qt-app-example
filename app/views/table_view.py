@@ -16,13 +16,15 @@ class TableView(QTableWidget):
         SCHEMA.SPEED: 'Speed (m/s)',
     }
 
-    def __init__(self, rows: int = 5, columns: int = 3) -> None:
+    def __init__(self, rows: int = 0, columns: int = 8) -> None:
         super().__init__(rows, columns)
         header = self.horizontalHeader()
         header.setSectionsMovable(True)
         self.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
+
+        self.setHorizontalHeaderLabels([value for _, value in self.COLUMN_LABELS.items()])
 
         # NOTE: Enable sorting after populating
         # self.setSortingEnabled(True)
