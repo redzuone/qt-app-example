@@ -3,6 +3,7 @@ from typing import Any
 
 from app.models.app_model import AppModel
 from app.services.data_store import DataStore
+from app.services.map_service import MapService
 from app.services.simulator_service import SimulatorService
 from app.views.main_window import MainWindow
 
@@ -15,11 +16,13 @@ class AppController:
         data_store: DataStore,
         model: AppModel,
         view: MainWindow,
+        map_service: MapService | None = None,
         simulator_service: SimulatorService | None = None,
     ):
         self._data_store = data_store
         self._model = model
         self._view = view
+        self._map_service = map_service
         self._simulator_service = simulator_service
 
         # Connect signals by feature groups, regardless of direction
@@ -64,3 +67,5 @@ class AppController:
         '''Handle updates from data store'''
         latest_df = self._data_store.get_latest_per_target()
         self._view.update_table(latest_df)
+        if self._map_service is not None:
+            self._map_service.update_targets(latest_df)

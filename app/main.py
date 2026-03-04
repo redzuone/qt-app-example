@@ -36,6 +36,7 @@ def main() -> None:
         data_store=data_store,
         model=model,
         view=view,
+        map_service=map_service,
         simulator_service=simulator_service,
     )
     view.show()

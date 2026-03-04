@@ -3,6 +3,9 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
+import polars as pl
+
+from app.constants.data_schema import SCHEMA
 from app.services.api import ThreadedUvicornServer
 
 IncomingMapMessageHandler = Callable[[int, dict[str, Any]], None]
@@ -42,3 +45,44 @@ class MapService:
         self, handler: IncomingMapMessageHandler | None
     ) -> None:
         self._server.set_web_message_handler(handler)
+
+    def update_targets(self, df: pl.DataFrame) -> None:
+        """Convert polars DataFrame to GeoJSON and send to web clients.
+        
+        Args:
+            df: DataFrame with columns: target_id, target_name, type, datetime,
+                latitude, longitude, height, speed
+        """
+        if df.is_empty():
+            geojson: dict[str, Any] = {'type': 'FeatureCollection', 'features': []}
+        else:
+            records = df.to_dicts()
+            
+            features = []
+            for record in records:
+                dt_value = record.get(SCHEMA.DATETIME)
+                datetime_str = dt_value.isoformat() if dt_value is not None else None
+                
+                feature = {
+                    'type': 'Feature',
+                    'geometry': {
+                        'type': 'Point',
+                        'coordinates': [
+                            record.get(SCHEMA.LONGITUDE),
+                            record.get(SCHEMA.LATITUDE),
+                        ],
+                    },
+                    'properties': {
+                        'target_id': record.get(SCHEMA.TARGET_ID),
+                        'target_name': record.get(SCHEMA.TARGET_NAME),
+                        'type': record.get(SCHEMA.TYPE),
+                        'datetime': datetime_str,
+                        'height': record.get(SCHEMA.HEIGHT),
+                        'speed': record.get(SCHEMA.SPEED),
+                    },
+                }
+                features.append(feature)
+            
+            geojson = {'type': 'FeatureCollection', 'features': features}
+        
+        self.send_cmd(command='update_targets', data=geojson)
