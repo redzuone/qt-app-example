@@ -97,6 +97,12 @@ class DataStore(QObject):
         self._batch.clear()
         self._df = self._df.clear()
         self.data_updated.emit()
+    
+    def delete_target(self, target_id: str) -> None:
+        """Delete all detections for a given target ID"""
+        self._flush_batch()
+        self._df = self._df.filter(pl.col(SCHEMA.TARGET_ID) != target_id)
+        self.data_updated.emit()
 
     def get_stats(self) -> dict[str, Any]:
         """Get statistics about stored data"""

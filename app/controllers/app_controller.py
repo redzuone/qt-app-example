@@ -22,6 +22,7 @@ class AppController:
         self._view = view
         self._simulator_service = simulator_service
 
+        # Connect signals by feature groups, regardless of direction
         if self._simulator_service is not None:
             self._connect_simulator()
         if self._data_store is not None:
@@ -51,6 +52,10 @@ class AppController:
     def _connect_data_store(self) -> None:
         data_store = self._data_store
         data_store.data_updated.connect(self._handle_data_updated)
+
+        self._view.table_view.delete_target_by_id.connect(
+            self._data_store.delete_target
+        )
 
     def _handle_raw_data(self, payload: dict[str, Any]) -> None:
         self._data_store.add_data(payload)
