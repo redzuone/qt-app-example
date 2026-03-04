@@ -47,6 +47,9 @@ class MainWindow(QMainWindow):
         file_menu = self.menu_bar.addMenu('File')
         file_menu.addAction('Exit', self.close)
 
+        view_menu = self.menu_bar.addMenu('View')
+        view_menu.addAction('Table', lambda: self._toggle_visibility(self.table_view))
+
         debug_menu = self.menu_bar.addMenu('Debug')
         self.simulator_action = QAction('Show Simulator', self)
         self.simulator_action.triggered.connect(lambda: self._show_view(self.simulator_view))
@@ -56,6 +59,12 @@ class MainWindow(QMainWindow):
         view.showNormal()
         view.raise_()
         view.activateWindow()
+
+    def _toggle_visibility(self, view: QWidget) -> None:
+        if view.isVisible():
+            view.hide()
+        else:
+            self._show_view(view)
 
     def register_aux_window(self, window: QWidget) -> None:
         if window not in self._aux_windows:
