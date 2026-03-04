@@ -2,7 +2,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import polars as pl
-from PySide6.QtCore import QObject, Signal
+from PySide6.QtCore import QObject, QTimer, Signal
 
 from app.constants.data_schema import SCHEMA
 
@@ -15,6 +15,7 @@ class DataStore(QObject):
         super().__init__()
         self._max_rows = max_rows
         self._auto_cleanup_hours = auto_cleanup_hours
+        self._batch_timeout_ms = 1000
 
         self._df = pl.DataFrame(
             schema={
@@ -29,17 +30,19 @@ class DataStore(QObject):
             }
         )
         self._batch: list[dict[str, Any]] = []
-        self._batch_size = 1  # Batch inserts
+
+        self._batch_timer = QTimer(self)
+        self._batch_timer.timeout.connect(self._flush_batch)
+        self._batch_timer.setSingleShot(True)
 
     def add_data(self, data: dict[str, Any]) -> None:
         """Add single data point (batched)"""
         data[SCHEMA.DATETIME] = datetime.fromisoformat(data[SCHEMA.DATETIME])
 
         self._batch.append(data)
-
-        # Flush batch when size reached
-        if len(self._batch) >= self._batch_size:
-            self._flush_batch()
+        
+        if not self._batch_timer.isActive():
+            self._batch_timer.start(self._batch_timeout_ms)
 
     def _flush_batch(self) -> None:
         """Flush batched data to DataFrame"""
@@ -102,6 +105,7 @@ class DataStore(QObject):
 
     def clear(self) -> None:
         """Clear all data"""
+        self._batch_timer.stop()
         self._batch.clear()
         self._df = self._df.clear()
         self.data_updated.emit()
