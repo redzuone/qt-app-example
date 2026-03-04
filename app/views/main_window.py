@@ -1,8 +1,8 @@
 import polars as pl
 from PySide6.QtGui import QAction, QCloseEvent
 from PySide6.QtWidgets import (
-    QHBoxLayout,
     QMainWindow,
+    QSplitter,
     QVBoxLayout,
     QWidget,
 )
@@ -19,6 +19,7 @@ class MainWindow(QMainWindow):
     def __init__(self, map_url: str) -> None:
         super().__init__()
         self.setWindowTitle('Qt Example')
+        self.setMinimumSize(800, 600)
         central = QWidget()
         self.setCentralWidget(central)
         layout = QVBoxLayout(central)
@@ -34,11 +35,11 @@ class MainWindow(QMainWindow):
         self.simulator_view = SimulatorView()
         self.register_aux_window(self.simulator_view)
 
-        content_layout = QHBoxLayout()
-
-        content_layout.addWidget(self.table_view)
-        content_layout.addWidget(self.map_view)
-        layout.addLayout(content_layout)
+        splitter = QSplitter()
+        splitter.addWidget(self.table_view)
+        splitter.addWidget(self.map_view)
+        splitter.setSizes([500, 500])
+        layout.addWidget(splitter)
 
     def _create_menu_bar(self) -> None:
         self.menu_bar = self.menuBar()
