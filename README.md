@@ -1,1 +1,1 @@
-# pyqt-app-example
+# qt-app-example

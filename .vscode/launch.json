@@ -5,10 +5,10 @@
       "name": "Python: Run app/main.py",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/app/main.py",
+      "module": "app.main",
       "console": "integratedTerminal",
       "cwd": "${workspaceFolder}",
-      "justMyCode": true
+      "justMyCode": true,
     }
   ]
 }
