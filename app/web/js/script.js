@@ -189,7 +189,7 @@ function focusTarget(data) {
         console.warn('Invalid focus_target data', data);
         return;
     }
-    map.setView([lat, lng], 14);
+    map.setView([lat, lng]);
 }
 
 map.on('zoomend', function () {
