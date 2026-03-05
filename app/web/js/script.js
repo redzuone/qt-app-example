@@ -18,6 +18,7 @@ let lastHelloAtMs = Date.now();
 let activeSocket = null;
 let realtimeLayer = null;
 let pendingGeojson = null;
+let markerTypeMap = {}; // Track marker types for detecting changes
 
 function sendWsJson(payload) {
     if (activeSocket && activeSocket.readyState === WebSocket.OPEN) {
@@ -92,9 +93,30 @@ function connectHeartbeatSocket() {
 }
 
 function updateTargetMarkers(geojson) {
+    const nextTypeMap = {};
+    const features = Array.isArray(geojson?.features) ? geojson.features : [];
+    features.forEach(function (feature) {
+        const props = feature?.properties;
+        if (props && props.target_id !== undefined) {
+            nextTypeMap[props.target_id] = props.type;
+        }
+    });
+
+    const hasTypeChanges = Object.keys(nextTypeMap).some(function (targetId) {
+        return markerTypeMap[targetId] !== undefined && markerTypeMap[targetId] !== nextTypeMap[targetId];
+    });
+
+    if (hasTypeChanges && realtimeLayer) {
+        map.removeLayer(realtimeLayer);
+        realtimeLayer = null;
+        markerTypeMap = {};
+    }
+
     if (!realtimeLayer) {
         initializeRealtimeLayer();
     }
+
+    markerTypeMap = { ...nextTypeMap };
     // Store the geojson and trigger one-time update
     pendingGeojson = geojson;
     if (!realtimeLayer.isRunning()) {
@@ -129,14 +151,38 @@ function initializeRealtimeLayer() {
             start: false,
             removeMissing: true,
             pointToLayer: function (feature, latlng) {
-                return L.circleMarker(latlng, {
-                    radius: 6,
-                    fillColor: getTargetColor(feature.properties),
-                    color: '#000',
-                    weight: 1,
-                    opacity: 1,
-                    fillOpacity: 0.8,
-                });
+                const featureType = feature.properties.type;
+                markerTypeMap[feature.properties.target_id] = featureType;
+                
+                if (featureType === 'vehicle') {
+                    // Arrow image for vehicle type
+                    const vehicleIcon = L.icon({
+                        iconUrl: '/img/arrow-nav.svg',
+                        iconSize: [32, 32],
+                        iconAnchor: [16, 16],
+                        popupAnchor: [0, -16],
+                    });
+                    return L.marker(latlng, { icon: vehicleIcon });
+                } else if (featureType === 'target') {
+                    // Target image for target type
+                    const targetIcon = L.icon({
+                        iconUrl: '/img/target.svg',
+                        iconSize: [32, 32],
+                        iconAnchor: [16, 16],
+                        popupAnchor: [0, -16],
+                    });
+                    return L.marker(latlng, { icon: targetIcon });
+                } else {
+                    // Use circle marker for raw_data type
+                    return L.circleMarker(latlng, {
+                        radius: 6,
+                        fillColor: getTargetColor(feature.properties),
+                        color: '#000',
+                        weight: 1,
+                        opacity: 1,
+                        fillOpacity: 0.8,
+                    });
+                }
             },
             onEachFeature: function (feature, layer) {
                 updatePopupContent(feature, layer);
@@ -150,11 +196,17 @@ function initializeRealtimeLayer() {
     // Update popup content when features are updated
     realtimeLayer.on('update', function (e) {
         Object.values(e.update).forEach(function (feature) {
-            const layer = realtimeLayer.getLayer(feature.properties.target_id);
-            if (layer) {
-                layer.setStyle({ fillColor: getTargetColor(feature.properties) });
-                updatePopupContent(feature, layer);
-            }
+			const targetId = feature.properties.target_id;
+			const featureType = feature.properties.type;
+			markerTypeMap[targetId] = featureType;
+
+			const layer = realtimeLayer.getLayer(targetId);
+			if (layer) {
+				if (featureType === 'raw_data' && layer.setStyle) {
+					layer.setStyle({ fillColor: getTargetColor(feature.properties) });
+				}
+				updatePopupContent(feature, layer);
+			}
         });
     });
 }
