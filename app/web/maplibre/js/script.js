@@ -147,6 +147,7 @@ const map = new maplibregl.Map({
     zoom: 0,
     maxZoom: 18,
 });
+map.scrollZoom.setWheelZoomRate(1 / 150);
 
 const ruler = createRuler(map);
 
