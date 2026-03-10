@@ -19,6 +19,8 @@ let activeSocket = null;
 let realtimeLayer = null;
 let pendingGeojson = null;
 let markerTypeMap = {}; // Track marker types for detecting changes
+let lastOpenPopupTargetId = null;
+let isRecreatingLayer = false; // Flag to distinguish layer recreation from user actions
 
 function sendWsJson(payload) {
     if (activeSocket && activeSocket.readyState === WebSocket.OPEN) {
@@ -106,7 +108,18 @@ function updateTargetMarkers(geojson) {
         return markerTypeMap[targetId] !== undefined && markerTypeMap[targetId] !== nextTypeMap[targetId];
     });
 
+    console.log('Updating target markers');
     if (hasTypeChanges && realtimeLayer) {
+        // Store which popup was open before removal
+        isRecreatingLayer = true;
+        console.log(map._popup);
+        if (map._popup) {
+            const openPopupLayer = map._popup._source;
+            if (openPopupLayer && openPopupLayer.feature) {
+                lastOpenPopupTargetId = openPopupLayer.feature.properties.target_id;
+            }
+        }
+        
         map.removeLayer(realtimeLayer);
         realtimeLayer = null;
         markerTypeMap = {};
@@ -186,6 +199,17 @@ function initializeRealtimeLayer() {
             },
             onEachFeature: function (feature, layer) {
                 updatePopupContent(feature, layer);
+                // Track when this layer's popup is opened
+                layer.on('popupopen', function () {
+                    lastOpenPopupTargetId = feature.properties.target_id;
+                    console.log('Popup opened for target_id', lastOpenPopupTargetId);
+                });
+                layer.on('popupclose', function () {
+                    if (!isRecreatingLayer) {
+                        lastOpenPopupTargetId = null;
+                        console.log('Popup closed by user for target_id', feature.properties.target_id);
+                    }
+                });
             },
             getFeatureId: function (feature) {
                 return feature.properties.target_id;
@@ -209,6 +233,19 @@ function initializeRealtimeLayer() {
 			}
         });
     });
+
+    console.log('Reopening popup for target_id', lastOpenPopupTargetId);
+    if (lastOpenPopupTargetId !== null) {
+        setTimeout(function () {
+            const layer = realtimeLayer.getLayer(lastOpenPopupTargetId);
+            if (layer) {
+                layer.openPopup();
+            }
+            isRecreatingLayer = false;
+        }, 0);
+    } else {
+        isRecreatingLayer = false;
+    }
 }
 
 function updatePopupContent(feature, layer) {
