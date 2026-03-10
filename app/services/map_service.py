@@ -112,7 +112,7 @@ class MapService:
         self.send_cmd(command='update_targets', data=geojson)
 
     def update_trails(self, df: pl.DataFrame) -> None:
-        """Convert per-point DataFrame to per-target trail LineString GeoJSON."""
+        """Convert per-point DataFrame to per-target segmented trail GeoJSON."""
         if df.is_empty():
             geojson: dict[str, Any] = {'type': 'FeatureCollection', 'features': []}
             self.send_cmd(command='update_trails', data=geojson)
@@ -143,16 +143,31 @@ class MapService:
             if len(coordinates) < 2:
                 continue
 
-            features.append(
-                {
-                    'type': 'Feature',
-                    'geometry': {
-                        'type': 'LineString',
-                        'coordinates': coordinates,
-                    },
-                    'properties': target_props[target_id],
-                }
-            )
+            total_segments = len(coordinates) - 1
+            min_alpha = 0.0
+            max_alpha = 1.0
+            alpha_range = max_alpha - min_alpha
+
+            for segment_index in range(total_segments):
+                start_coord = coordinates[segment_index]
+                end_coord = coordinates[segment_index + 1]
+                progress = (segment_index + 1) / total_segments
+                eased_progress = progress ** 2.8
+                alpha = min_alpha + (alpha_range * eased_progress)
+
+                features.append(
+                    {
+                        'type': 'Feature',
+                        'geometry': {
+                            'type': 'LineString',
+                            'coordinates': [start_coord, end_coord],
+                        },
+                        'properties': {
+                            **target_props[target_id],
+                            'alpha': alpha,
+                        },
+                    }
+                )
 
         geojson = {'type': 'FeatureCollection', 'features': features}
         self.send_cmd(command='update_trails', data=geojson)

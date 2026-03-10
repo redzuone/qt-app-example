@@ -454,6 +454,8 @@ function initializeTrailsLayers() {
         map.addSource(TRAILS_SOURCE_ID, {
             type: 'geojson',
             data: pendingTrailsGeoJson,
+            tolerance: 0,
+            buffer: 256,
         });
     }
 
@@ -461,10 +463,14 @@ function initializeTrailsLayers() {
         id: TRAILS_LAYER_ID,
         type: 'line',
         source: TRAILS_SOURCE_ID,
+        layout: {
+            'line-cap': 'round',
+            'line-join': 'round',
+        },
         paint: {
+            'line-width': 3,
             'line-color': ['coalesce', ['get', 'color'], '#FFA07A'],
-            'line-width': 2,
-            'line-opacity': 0.7,
+            'line-opacity': ['coalesce', ['get', 'alpha'], 0.7],
         },
     });
 
