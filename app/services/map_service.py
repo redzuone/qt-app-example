@@ -17,8 +17,12 @@ class MapService:
         self._server = ThreadedUvicornServer()
 
     @property
+    def base_url(self) -> str:
+        return f'{self._server.base_url}'
+
+    @property
     def map_url(self) -> str:
-        return f'{self._server.base_url}/index.html'
+        return f'{self._server.base_url}/maplibre'
 
     def start(self) -> None:
         self._server.start()

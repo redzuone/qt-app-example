@@ -13,3 +13,6 @@ class MapView(QWidget):
         self._web_view = QWebEngineView(self)
         self._web_view.setUrl(QUrl(map_url))
         layout.addWidget(self._web_view)
+
+    def set_map_url(self, url: str) -> None:
+        self._web_view.setUrl(QUrl(url))

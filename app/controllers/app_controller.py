@@ -33,6 +33,7 @@ class AppController:
             self._connect_data_store()
         self._connect_table_view()
         self._connect_tree_view()
+        self._connect_misc_signals()
 
     def _connect_simulator(self) -> None:
         simulator_service = self._simulator_service
@@ -77,6 +78,9 @@ class AppController:
             self._data_store.delete_target
         )
 
+    def _connect_misc_signals(self) -> None:
+        self._view.debug_action.connect(self._handle_debug_action)
+
     def _on_view_target_on_map(self, target_id: str) -> None:
         '''Handle view target on map request'''
         if self._map_service is None or self._data_store is None:
@@ -107,3 +111,11 @@ class AppController:
             self._view.tree_view.update_tree(latest_df)
         if self._map_service is not None:
             self._map_service.update_targets(latest_df)
+
+    def _handle_debug_action(self, action_name: str) -> None:
+        if self._map_service is None:
+            return
+        if action_name == 'show_leaflet_map':
+            self._view.set_map_url(self._map_service.base_url + '/leaflet')
+        elif action_name == 'show_maplibre_map':
+            self._view.set_map_url(self._map_service.base_url + '/maplibre')
