@@ -1,3 +1,5 @@
+import { createRuler } from './ruler.js';
+
 const HELLO_MISSING_THRESHOLD_MS = 6000;
 const HELLO_WATCHDOG_INTERVAL_MS = 1000;
 const VEHICLE_ICON_PATH = '/img/arrow-nav.svg';
@@ -117,22 +119,6 @@ class StyleSelectorControl {
     }
 }
 
-const map = new maplibregl.Map({
-    container: 'map',
-    style: resolveStyle(DEFAULT_STYLE_KEY),
-    center: [0, 0],
-    zoom: 0,
-    maxZoom: 18,
-});
-
-map.addControl(
-    new maplibregl.NavigationControl({
-        showCompass: true,
-    }),
-    'top-right'
-);
-map.addControl(new StyleSelectorControl(), 'top-left');
-
 let lastHelloAtMs = Date.now();
 let activeSocket = null;
 let targetsLayerReady = false;
@@ -143,6 +129,25 @@ let pendingTargetsGeoJson = {
 let rawIconReady = false;
 let vehicleIconReady = false;
 let targetIconReady = false;
+
+const map = new maplibregl.Map({
+    container: 'map',
+    style: resolveStyle(DEFAULT_STYLE_KEY),
+    center: [0, 0],
+    zoom: 0,
+    maxZoom: 18,
+});
+
+const ruler = createRuler(map);
+
+map.addControl(
+    new maplibregl.NavigationControl({
+        showCompass: true,
+    }),
+    'top-right'
+);
+map.addControl(new StyleSelectorControl(), 'top-left');
+map.addControl(new ruler.RulerControl(), 'top-left');
 
 function sendWsJson(payload) {
     if (activeSocket && activeSocket.readyState === WebSocket.OPEN) {
@@ -464,12 +469,17 @@ map.on('zoomend', function () {
     });
 });
 
+map.on('click', function (event) {
+    ruler.handleMapClick(event);
+});
+
 map.on('style.load', function () {
     try {
         targetsLayerReady = false;
         initializeTargetsLayers();
+        ruler.handleStyleLoad();
     } catch (error) {
-        console.error('Failed to initialize target layers', error);
+        console.error('Failed to initialize map layers', error);
     }
 });
 
