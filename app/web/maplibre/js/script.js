@@ -15,6 +15,9 @@ const TARGETS_ICON_LAYER_ID = 'targets-icon-layer';
 const VEHICLE_ICON_ID = 'vehicle-icon';
 const TARGET_ICON_ID = 'target-icon';
 const RAW_ICON_ID = 'raw-icon';
+const SDF_IMAGE_OPTIONS = {
+    sdf: true,
+};
 const OPEN_FREE_MAP_STYLE_BASE_URL = 'https://tiles.openfreemap.org/styles';
 const DEFAULT_STYLE_KEY = 'osm';
 
@@ -313,6 +316,9 @@ function refreshTargetRenderLayers() {
                 'icon-allow-overlap': true,
                 'icon-ignore-placement': true,
             },
+            paint: {
+                'icon-color': ['coalesce', ['get', 'color'], '#FFA07A'],
+            },
         });
     } else {
         map.addLayer({
@@ -340,6 +346,9 @@ function refreshTargetRenderLayers() {
                 'icon-size': 1,
                 'icon-allow-overlap': true,
                 'icon-ignore-placement': true,
+            },
+            paint: {
+                'icon-color': ['coalesce', ['get', 'color'], '#3b82f6'],
             },
         });
     } else {
@@ -369,6 +378,9 @@ function refreshTargetRenderLayers() {
                 'icon-allow-overlap': true,
                 'icon-ignore-placement': true,
             },
+            paint: {
+                'icon-color': ['coalesce', ['get', 'color'], '#ef4444'],
+            },
         });
     } else {
         map.addLayer({
@@ -386,7 +398,7 @@ function refreshTargetRenderLayers() {
     }
 }
 
-function tryRegisterMapImage(imageId, imagePath, onReady) {
+function tryRegisterMapImage(imageId, imagePath, onReady, imageOptions) {
     if (map.hasImage(imageId)) {
         onReady();
         return true;
@@ -397,7 +409,7 @@ function tryRegisterMapImage(imageId, imagePath, onReady) {
         imageElement.onload = function () {
             try {
                 if (!map.hasImage(imageId)) {
-                    map.addImage(imageId, imageElement);
+                    map.addImage(imageId, imageElement, imageOptions || {});
                 }
                 onReady();
                 if (targetsLayerReady) {
@@ -422,15 +434,30 @@ function tryRegisterMapImage(imageId, imagePath, onReady) {
 }
 
 function initializeTargetsLayers() {
-    rawIconReady = tryRegisterMapImage(RAW_ICON_ID, RAW_ICON_PATH, function () {
-        rawIconReady = true;
-    });
-    vehicleIconReady = tryRegisterMapImage(VEHICLE_ICON_ID, VEHICLE_ICON_PATH, function () {
-        vehicleIconReady = true;
-    });
-    targetIconReady = tryRegisterMapImage(TARGET_ICON_ID, TARGET_ICON_PATH, function () {
-        targetIconReady = true;
-    });
+    rawIconReady = tryRegisterMapImage(
+        RAW_ICON_ID,
+        RAW_ICON_PATH,
+        function () {
+            rawIconReady = true;
+        },
+        SDF_IMAGE_OPTIONS,
+    );
+    vehicleIconReady = tryRegisterMapImage(
+        VEHICLE_ICON_ID,
+        VEHICLE_ICON_PATH,
+        function () {
+            vehicleIconReady = true;
+        },
+        SDF_IMAGE_OPTIONS,
+    );
+    targetIconReady = tryRegisterMapImage(
+        TARGET_ICON_ID,
+        TARGET_ICON_PATH,
+        function () {
+            targetIconReady = true;
+        },
+        SDF_IMAGE_OPTIONS,
+    );
 
     if (!map.getSource(TARGETS_SOURCE_ID)) {
         map.addSource(TARGETS_SOURCE_ID, {
