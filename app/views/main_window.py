@@ -64,12 +64,11 @@ class MainWindow(QMainWindow):
         self.simulator_action = QAction('Show Simulator', self)
         self.simulator_action.triggered.connect(lambda: self._show_view(self.simulator_view))
 
-        map_submenu = view_menu.addMenu('Map')
+        debug_menu.addAction(self.simulator_action)
+
+        map_submenu = debug_menu.addMenu('Map')
         map_submenu.addAction('Leaflet map', lambda: self.debug_action.emit('show_leaflet_map'))
         map_submenu.addAction('Maplibre map', lambda: self.debug_action.emit('show_maplibre_map'))
-
-        debug_menu.addAction(self.simulator_action)
-        debug_menu.addMenu(map_submenu)
 
     def _show_view(self, view: QWidget) -> None:
         view.showNormal()
