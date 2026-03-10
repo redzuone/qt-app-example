@@ -110,3 +110,49 @@ class MapService:
             geojson = {'type': 'FeatureCollection', 'features': features}
         
         self.send_cmd(command='update_targets', data=geojson)
+
+    def update_trails(self, df: pl.DataFrame) -> None:
+        """Convert per-point DataFrame to per-target trail LineString GeoJSON."""
+        if df.is_empty():
+            geojson: dict[str, Any] = {'type': 'FeatureCollection', 'features': []}
+            self.send_cmd(command='update_trails', data=geojson)
+            return
+
+        records = df.sort([SCHEMA.TARGET_ID, SCHEMA.DATETIME]).to_dicts()
+        target_points: dict[str, list[list[float]]] = {}
+        target_props: dict[str, dict[str, Any]] = {}
+
+        for record in records:
+            target_id = record.get(SCHEMA.TARGET_ID)
+            latitude = record.get(SCHEMA.LATITUDE)
+            longitude = record.get(SCHEMA.LONGITUDE)
+            if target_id is None or latitude is None or longitude is None:
+                continue
+
+            target_id_str = str(target_id)
+            target_points.setdefault(target_id_str, []).append([longitude, latitude])
+            target_props[target_id_str] = {
+                'target_id': target_id_str,
+                'target_name': record.get(SCHEMA.TARGET_NAME),
+                'type': record.get(SCHEMA.TYPE),
+                'color': target_color_hex(target_id_str),
+            }
+
+        features = []
+        for target_id, coordinates in target_points.items():
+            if len(coordinates) < 2:
+                continue
+
+            features.append(
+                {
+                    'type': 'Feature',
+                    'geometry': {
+                        'type': 'LineString',
+                        'coordinates': coordinates,
+                    },
+                    'properties': target_props[target_id],
+                }
+            )
+
+        geojson = {'type': 'FeatureCollection', 'features': features}
+        self.send_cmd(command='update_trails', data=geojson)

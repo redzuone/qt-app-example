@@ -6,6 +6,8 @@ const VEHICLE_ICON_PATH = '/img/arrow-nav.svg';
 const TARGET_ICON_PATH = '/img/target.svg';
 const RAW_ICON_PATH = '/img/pin.svg';
 const TARGETS_SOURCE_ID = 'targets-source';
+const TRAILS_SOURCE_ID = 'trails-source';
+const TRAILS_LAYER_ID = 'trails-layer';
 const TARGETS_UNKNOWN_CIRCLE_LAYER_ID = 'targets-unknown-circle-layer';
 const TARGETS_RAW_LAYER_ID = 'targets-raw-layer';
 const TARGETS_VEHICLE_LAYER_ID = 'targets-vehicle-layer';
@@ -122,7 +124,12 @@ class StyleSelectorControl {
 let lastHelloAtMs = Date.now();
 let activeSocket = null;
 let targetsLayerReady = false;
+let trailsLayerReady = false;
 let pendingTargetsGeoJson = {
+    type: 'FeatureCollection',
+    features: [],
+};
+let pendingTrailsGeoJson = {
     type: 'FeatureCollection',
     features: [],
 };
@@ -203,6 +210,60 @@ function setTargetsData(geojson) {
     }
 
     const source = map.getSource(TARGETS_SOURCE_ID);
+    if (source) {
+        source.setData(normalized);
+    }
+}
+
+function normalizeTrailsGeoJson(geojson) {
+    const inputFeatures = Array.isArray(geojson?.features) ? geojson.features : [];
+
+    const features = inputFeatures
+        .filter(function (feature) {
+            const targetId = feature?.properties?.target_id;
+            const coordinates = feature?.geometry?.coordinates;
+            if (
+                targetId === undefined ||
+                feature?.geometry?.type !== 'LineString' ||
+                !Array.isArray(coordinates) ||
+                coordinates.length < 2
+            ) {
+                return false;
+            }
+
+            return coordinates.every(function (coordinate) {
+                return (
+                    Array.isArray(coordinate) &&
+                    coordinate.length >= 2 &&
+                    Number.isFinite(Number(coordinate[0])) &&
+                    Number.isFinite(Number(coordinate[1]))
+                );
+            });
+        })
+        .map(function (feature) {
+            return {
+                ...feature,
+                properties: {
+                    ...(feature.properties || {}),
+                },
+            };
+        });
+
+    return {
+        type: 'FeatureCollection',
+        features,
+    };
+}
+
+function setTrailsData(geojson) {
+    const normalized = normalizeTrailsGeoJson(geojson);
+    pendingTrailsGeoJson = normalized;
+
+    if (!trailsLayerReady) {
+        return;
+    }
+
+    const source = map.getSource(TRAILS_SOURCE_ID);
     if (source) {
         source.setData(normalized);
     }
@@ -384,8 +445,39 @@ function initializeTargetsLayers() {
     setTargetsData(pendingTargetsGeoJson);
 }
 
+function initializeTrailsLayers() {
+    if (map.getLayer(TRAILS_LAYER_ID)) {
+        map.removeLayer(TRAILS_LAYER_ID);
+    }
+
+    if (!map.getSource(TRAILS_SOURCE_ID)) {
+        map.addSource(TRAILS_SOURCE_ID, {
+            type: 'geojson',
+            data: pendingTrailsGeoJson,
+        });
+    }
+
+    map.addLayer({
+        id: TRAILS_LAYER_ID,
+        type: 'line',
+        source: TRAILS_SOURCE_ID,
+        paint: {
+            'line-color': ['coalesce', ['get', 'color'], '#FFA07A'],
+            'line-width': 2,
+            'line-opacity': 0.7,
+        },
+    });
+
+    trailsLayerReady = true;
+    setTrailsData(pendingTrailsGeoJson);
+}
+
 function updateTargetMarkers(geojson) {
     setTargetsData(geojson);
+}
+
+function updateTargetTrails(geojson) {
+    setTrailsData(geojson);
 }
 
 function focusTarget(data) {
@@ -425,6 +517,10 @@ function connectHeartbeatSocket() {
             if (message.type === 'cmd') {
                 if (message.command === 'update_targets' && message.data) {
                     updateTargetMarkers(message.data);
+                }
+
+                if (message.command === 'update_trails' && message.data) {
+                    updateTargetTrails(message.data);
                 }
 
                 if (message.command === 'focus_target' && message.data) {
@@ -476,7 +572,9 @@ map.on('click', function (event) {
 map.on('style.load', function () {
     try {
         targetsLayerReady = false;
+        trailsLayerReady = false;
         initializeTargetsLayers();
+        initializeTrailsLayers();
         ruler.handleStyleLoad();
     } catch (error) {
         console.error('Failed to initialize map layers', error);

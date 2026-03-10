@@ -88,6 +88,34 @@ class DataStore(QObject):
         self._flush_batch()
         return self._df.group_by(SCHEMA.TARGET_ID).agg(pl.all().sort_by(SCHEMA.DATETIME).last())
 
+    def get_trail_points_per_target(self, max_points_per_target: int = 200) -> pl.DataFrame:
+        """Get recent ordered trail points per target.
+
+        Returns a DataFrame with one row per point, sorted by target and datetime,
+        containing only valid coordinates.
+        """
+        self._flush_batch()
+
+        if self._df.is_empty():
+            return self._df.clear()
+
+        trail_df = (
+            self._df
+            .filter(
+                pl.col(SCHEMA.LATITUDE).is_not_null()
+                & pl.col(SCHEMA.LONGITUDE).is_not_null()
+            )
+            .sort([SCHEMA.TARGET_ID, SCHEMA.DATETIME])
+        )
+
+        if max_points_per_target > 0:
+            trail_df = trail_df.group_by(
+                SCHEMA.TARGET_ID,
+                maintain_order=True,
+            ).tail(max_points_per_target)
+
+        return trail_df
+
     def sort_by_time(self, descending: bool = False) -> pl.DataFrame:
         """Sort by time"""
         self._flush_batch()

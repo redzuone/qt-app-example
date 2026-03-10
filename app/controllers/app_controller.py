@@ -111,6 +111,8 @@ class AppController:
             self._view.tree_view.update_tree(latest_df)
         if self._map_service is not None:
             self._map_service.update_targets(latest_df)
+            trail_df = self._data_store.get_trail_points_per_target()
+            self._map_service.update_trails(trail_df)
 
     def _handle_debug_action(self, action_name: str) -> None:
         if self._map_service is None:
