@@ -11,30 +11,115 @@ const TARGETS_ICON_LAYER_ID = 'targets-icon-layer';
 const VEHICLE_ICON_ID = 'vehicle-icon';
 const TARGET_ICON_ID = 'target-icon';
 const RAW_ICON_ID = 'raw-icon';
+const OPEN_FREE_MAP_STYLE_BASE_URL = 'https://tiles.openfreemap.org/styles';
+const DEFAULT_STYLE_KEY = 'osm';
+
+const STYLE_OPTIONS = {
+    grey: {
+        label: 'Empty',
+        style: {
+            version: 8,
+            sources: {},
+            layers: [
+                {
+                    id: 'grey-background',
+                    type: 'background',
+                    paint: {
+                        'background-color': '#6b7280',
+                    },
+                },
+            ],
+        },
+    },
+    osm: {
+        label: 'OSM Raster',
+        style: {
+            version: 8,
+            sources: {
+                'raster-tiles': {
+                    type: 'raster',
+                    tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+                    tileSize: 256,
+                    minzoom: 0,
+                    maxzoom: 18,
+                    attribution: '© OpenStreetMap contributors',
+                },
+            },
+            layers: [
+                {
+                    id: 'osm-tiles',
+                    type: 'raster',
+                    source: 'raster-tiles',
+                },
+            ],
+        },
+    },
+    positron: {
+        label: 'Positron',
+        style: `${OPEN_FREE_MAP_STYLE_BASE_URL}/positron`,
+    },
+    bright: {
+        label: 'Bright',
+        style: `${OPEN_FREE_MAP_STYLE_BASE_URL}/bright`,
+    },
+    liberty: {
+        label: 'Liberty',
+        style: `${OPEN_FREE_MAP_STYLE_BASE_URL}/liberty`,
+    },
+};
+
+function resolveStyle(styleKey) {
+    return STYLE_OPTIONS[styleKey]?.style || STYLE_OPTIONS[DEFAULT_STYLE_KEY].style;
+}
+
+function applyStyleSelection(mapInstance, styleKey) {
+    mapInstance.setStyle(resolveStyle(styleKey));
+}
+
+class StyleSelectorControl {
+    onAdd(mapInstance) {
+        this._map = mapInstance;
+        this._container = document.createElement('div');
+        this._container.className = 'maplibregl-ctrl maplibregl-ctrl-group';
+
+        this._select = document.createElement('select');
+        this._select.title = 'Map style';
+        this._select.setAttribute('aria-label', 'Map style');
+        this._select.style.height = '29px';
+        this._select.style.border = 'none';
+        this._select.style.padding = '0 8px';
+        this._select.style.background = '#fff';
+        this._select.style.font = '12px/20px Helvetica Neue, Arial, Helvetica, sans-serif';
+
+        Object.entries(STYLE_OPTIONS).forEach(([key, option]) => {
+            const optionElement = document.createElement('option');
+            optionElement.value = key;
+            optionElement.textContent = option.label;
+            this._select.appendChild(optionElement);
+        });
+
+        this._select.value = DEFAULT_STYLE_KEY;
+        this._select.addEventListener('change', this._onChange.bind(this));
+        this._container.appendChild(this._select);
+        return this._container;
+    }
+
+    onRemove() {
+        if (this._container && this._container.parentNode) {
+            this._container.parentNode.removeChild(this._container);
+        }
+        this._map = undefined;
+    }
+
+    _onChange(event) {
+        const selectedStyleKey = event.target.value;
+        applyStyleSelection(this._map, selectedStyleKey);
+    }
+}
 
 const map = new maplibregl.Map({
     container: 'map',
-    style: {
-        version: 8,
-        sources: {
-            'raster-tiles': {
-                type: 'raster',
-                tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
-                tileSize: 256,
-                minzoom: 0,
-                maxzoom: 18,
-                attribution: '© OpenStreetMap contributors',
-            },
-        },
-        layers: [
-            {
-                id: 'osm-tiles',
-                type: 'raster',
-                source: 'raster-tiles',
-            },
-        ],
-        id: 'blank',
-    },
+    style: resolveStyle(DEFAULT_STYLE_KEY),
     center: [0, 0],
     zoom: 0,
     maxZoom: 18,
@@ -46,6 +131,7 @@ map.addControl(
     }),
     'top-right'
 );
+map.addControl(new StyleSelectorControl(), 'top-left');
 
 let lastHelloAtMs = Date.now();
 let activeSocket = null;
@@ -378,8 +464,9 @@ map.on('zoomend', function () {
     });
 });
 
-map.on('load', function () {
+map.on('style.load', function () {
     try {
+        targetsLayerReady = false;
         initializeTargetsLayers();
     } catch (error) {
         console.error('Failed to initialize target layers', error);
