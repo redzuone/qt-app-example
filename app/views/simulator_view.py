@@ -4,6 +4,7 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QCloseEvent, QHideEvent, QShowEvent
 from PySide6.QtWidgets import (
 	QCheckBox,
+	QComboBox,
 	QDoubleSpinBox,
 	QHBoxLayout,
 	QLabel,
@@ -58,6 +59,9 @@ class TargetSection(QWidget):
 		self._static_checkbox = QCheckBox('Static')
 		self._static_checkbox.setChecked(True)
 
+		self._type_combo = QComboBox()
+		self._type_combo.addItems(['raw_data', 'vehicle', 'target'])
+
 		self._start_stop_button = QPushButton('Start')
 
 	def _init_layout(self) -> None:
@@ -69,6 +73,7 @@ class TargetSection(QWidget):
 		content_layout.addLayout(self._labeled_row('Latitude', self._latitude_input))
 		content_layout.addLayout(self._labeled_row('Longitude', self._longitude_input))
 		content_layout.addLayout(self._labeled_row('Target ID', self._target_id_input))
+		content_layout.addLayout(self._labeled_row('Type', self._type_combo))
 		content_layout.addWidget(self._static_checkbox)
 		content_layout.addWidget(self._start_stop_button)
 
@@ -96,6 +101,7 @@ class TargetSection(QWidget):
 			'target_id': self._target_id_input.value(),
 			'latitude': self._latitude_input.value(),
 			'longitude': self._longitude_input.value(),
+			'type': self._type_combo.currentText(),
 			'static': self._static_checkbox.isChecked(),
 		}
 
