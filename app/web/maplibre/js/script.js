@@ -1,4 +1,5 @@
 import { createRuler } from './ruler.js';
+import { StyleSelectorControl } from './style-selector.js';
 
 const HELLO_MISSING_THRESHOLD_MS = 6000;
 const HELLO_WATCHDOG_INTERVAL_MS = 1000;
@@ -79,49 +80,9 @@ function resolveStyle(styleKey) {
     return STYLE_OPTIONS[styleKey]?.style || STYLE_OPTIONS[DEFAULT_STYLE_KEY].style;
 }
 
-function applyStyleSelection(mapInstance, styleKey) {
-    mapInstance.setStyle(resolveStyle(styleKey));
-}
-
-class StyleSelectorControl {
-    onAdd(mapInstance) {
-        this._map = mapInstance;
-        this._container = document.createElement('div');
-        this._container.className = 'maplibregl-ctrl maplibregl-ctrl-group';
-
-        this._select = document.createElement('select');
-        this._select.title = 'Map style';
-        this._select.setAttribute('aria-label', 'Map style');
-        this._select.style.height = '29px';
-        this._select.style.border = 'none';
-        this._select.style.padding = '0 8px';
-        this._select.style.background = '#fff';
-        this._select.style.font = '12px/20px Helvetica Neue, Arial, Helvetica, sans-serif';
-
-        Object.entries(STYLE_OPTIONS).forEach(([key, option]) => {
-            const optionElement = document.createElement('option');
-            optionElement.value = key;
-            optionElement.textContent = option.label;
-            this._select.appendChild(optionElement);
-        });
-
-        this._select.value = DEFAULT_STYLE_KEY;
-        this._select.addEventListener('change', this._onChange.bind(this));
-        this._container.appendChild(this._select);
-        return this._container;
-    }
-
-    onRemove() {
-        if (this._container && this._container.parentNode) {
-            this._container.parentNode.removeChild(this._container);
-        }
-        this._map = undefined;
-    }
-
-    _onChange(event) {
-        const selectedStyleKey = event.target.value;
-        applyStyleSelection(this._map, selectedStyleKey);
-    }
+function applyStyleSelection(styleKey) {
+    const style = resolveStyle(styleKey);
+    map.setStyle(style);
 }
 
 let lastHelloAtMs = Date.now();
@@ -157,7 +118,10 @@ map.addControl(
     }),
     'top-right'
 );
-map.addControl(new StyleSelectorControl(), 'top-left');
+map.addControl(
+    new StyleSelectorControl(STYLE_OPTIONS, DEFAULT_STYLE_KEY, applyStyleSelection),
+    'top-left'
+);
 map.addControl(new ruler.RulerControl(), 'top-left');
 
 function sendWsJson(payload) {
