@@ -17,8 +17,12 @@ class MapService:
         self._server = ThreadedUvicornServer()
 
     @property
+    def base_url(self) -> str:
+        return f'{self._server.base_url}'
+
+    @property
     def map_url(self) -> str:
-        return f'{self._server.base_url}/index.html'
+        return f'{self._server.base_url}/maplibre'
 
     def start(self) -> None:
         self._server.start()
@@ -106,3 +110,64 @@ class MapService:
             geojson = {'type': 'FeatureCollection', 'features': features}
         
         self.send_cmd(command='update_targets', data=geojson)
+
+    def update_trails(self, df: pl.DataFrame) -> None:
+        """Convert per-point DataFrame to per-target segmented trail GeoJSON."""
+        if df.is_empty():
+            geojson: dict[str, Any] = {'type': 'FeatureCollection', 'features': []}
+            self.send_cmd(command='update_trails', data=geojson)
+            return
+
+        records = df.sort([SCHEMA.TARGET_ID, SCHEMA.DATETIME]).to_dicts()
+        target_points: dict[str, list[list[float]]] = {}
+        target_props: dict[str, dict[str, Any]] = {}
+
+        for record in records:
+            target_id = record.get(SCHEMA.TARGET_ID)
+            latitude = record.get(SCHEMA.LATITUDE)
+            longitude = record.get(SCHEMA.LONGITUDE)
+            if target_id is None or latitude is None or longitude is None:
+                continue
+
+            target_id_str = str(target_id)
+            target_points.setdefault(target_id_str, []).append([longitude, latitude])
+            target_props[target_id_str] = {
+                'target_id': target_id_str,
+                'target_name': record.get(SCHEMA.TARGET_NAME),
+                'type': record.get(SCHEMA.TYPE),
+                'color': target_color_hex(target_id_str),
+            }
+
+        features = []
+        for target_id, coordinates in target_points.items():
+            if len(coordinates) < 2:
+                continue
+
+            total_segments = len(coordinates) - 1
+            min_alpha = 0.0
+            max_alpha = 1.0
+            alpha_range = max_alpha - min_alpha
+
+            for segment_index in range(total_segments):
+                start_coord = coordinates[segment_index]
+                end_coord = coordinates[segment_index + 1]
+                progress = (segment_index + 1) / total_segments
+                eased_progress = progress ** 2.8
+                alpha = min_alpha + (alpha_range * eased_progress)
+
+                features.append(
+                    {
+                        'type': 'Feature',
+                        'geometry': {
+                            'type': 'LineString',
+                            'coordinates': [start_coord, end_coord],
+                        },
+                        'properties': {
+                            **target_props[target_id],
+                            'alpha': alpha,
+                        },
+                    }
+                )
+
+        geojson = {'type': 'FeatureCollection', 'features': features}
+        self.send_cmd(command='update_trails', data=geojson)
