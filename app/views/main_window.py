@@ -1,4 +1,5 @@
 import polars as pl
+from PySide6.QtCore import Signal
 from PySide6.QtGui import QAction, QCloseEvent, Qt
 from PySide6.QtWidgets import (
     QMainWindow,
@@ -16,6 +17,7 @@ from app.views.toolbar import ToolBar
 
 class MainWindow(QMainWindow):
     """Main application window."""
+    debug_action = Signal(str)
 
     def __init__(self, map_url: str) -> None:
         super().__init__()
@@ -61,7 +63,12 @@ class MainWindow(QMainWindow):
         debug_menu = self.menu_bar.addMenu('Debug')
         self.simulator_action = QAction('Show Simulator', self)
         self.simulator_action.triggered.connect(lambda: self._show_view(self.simulator_view))
+
         debug_menu.addAction(self.simulator_action)
+
+        map_submenu = debug_menu.addMenu('Map')
+        map_submenu.addAction('Leaflet map', lambda: self.debug_action.emit('show_leaflet_map'))
+        map_submenu.addAction('Maplibre map', lambda: self.debug_action.emit('show_maplibre_map'))
 
     def _show_view(self, view: QWidget) -> None:
         view.showNormal()
@@ -93,3 +100,6 @@ class MainWindow(QMainWindow):
 
     def update_table(self, df: pl.DataFrame) -> None:
         self.table_view.update_table(df)
+
+    def set_map_url(self, url: str) -> None:
+        self.map_view.set_map_url(url)

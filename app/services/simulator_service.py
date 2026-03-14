@@ -15,6 +15,7 @@ class _TargetState:
 	latitude: float
 	longitude: float
 	static: bool
+	target_type: str
 	tick: int = 0
 
 
@@ -40,6 +41,7 @@ class SimulatorService(QObject):
 			latitude=float(target_data['latitude']),
 			longitude=float(target_data['longitude']),
 			static=bool(target_data.get('static', True)),
+			target_type=str(target_data.get('type', 'raw_data')),
 		)
 
 		self._targets[target_id] = target_state
@@ -75,7 +77,7 @@ class SimulatorService(QObject):
 
 			self.new_raw_data.emit(
 				{
-					SCHEMA.TYPE: 'raw_data',
+					SCHEMA.TYPE: target_state.target_type,
 					SCHEMA.TARGET_ID: target_state.target_id,
 					SCHEMA.TARGET_NAME: target_state.target_name,
 					SCHEMA.LATITUDE: target_state.latitude,

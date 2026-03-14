@@ -1,4 +1,5 @@
 import logging
+import os
 import sys
 
 import qt_themes  # type: ignore[import-untyped]
@@ -14,13 +15,19 @@ from app.views.main_window import MainWindow
 
 
 def main() -> None:
+    # Fix Uvicorn logging when frozen without a console
+    if sys.stdout is None:
+        sys.stdout = open(os.devnull, 'w')
+    if sys.stderr is None:
+        sys.stderr = open(os.devnull, 'w')
+
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s | %(levelname)s | %(name)s | %(message)s',
     )
 
     app = QApplication(sys.argv)
-    qt_themes.set_theme('nord')
+    qt_themes.set_theme('one_dark_two')
     map_service = MapService()
     map_service.start()
     app.aboutToQuit.connect(map_service.stop)
