@@ -27,7 +27,7 @@ def main() -> None:
     )
 
     app = QApplication(sys.argv)
-    qt_themes.set_theme('nord')
+    qt_themes.set_theme('one_dark_two')
     map_service = MapService()
     map_service.start()
     app.aboutToQuit.connect(map_service.stop)
