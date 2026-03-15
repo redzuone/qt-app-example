@@ -1,4 +1,4 @@
-import logging
+import multiprocessing as mp
 import os
 import sys
 
@@ -10,6 +10,7 @@ from app.models.app_model import AppModel
 from app.services.data_store import DataStore
 from app.services.map_service import MapService
 from app.services.simulator_service import SimulatorService
+from app.utils.logging_config import configure_logging
 from app.utils.windows_title_bar import apply_windows_dark_style
 from app.views.main_window import MainWindow
 
@@ -21,10 +22,7 @@ def main() -> None:
     if sys.stderr is None:
         sys.stderr = open(os.devnull, 'w')
 
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s | %(levelname)s | %(name)s | %(message)s',
-    )
+    configure_logging()
 
     app = QApplication(sys.argv)
     qt_themes.set_theme('one_dark_two')
@@ -51,4 +49,5 @@ def main() -> None:
 
 
 if __name__ == '__main__':
+    mp.freeze_support()
     main()
