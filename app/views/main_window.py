@@ -1,5 +1,5 @@
 import polars as pl
-from PySide6.QtCore import Signal
+from PySide6.QtCore import QByteArray, QSettings, QSize, Signal
 from PySide6.QtGui import QAction, QCloseEvent, Qt
 from PySide6.QtWidgets import (
     QMainWindow,
@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app.constants import APP_DISPLAY_NAME
 from app.views.map_view import MapView
 from app.views.simulator_view import SimulatorView
 from app.views.table_view import TableView
@@ -19,9 +20,10 @@ class MainWindow(QMainWindow):
     """Main application window."""
     debug_action = Signal(str)
 
-    def __init__(self, map_url: str) -> None:
+    def __init__(self, map_url: str, settings: QSettings) -> None:
         super().__init__()
-        self.setWindowTitle('Qt Example')
+        self._settings = settings
+        self.setWindowTitle(APP_DISPLAY_NAME)
         self.setMinimumSize(800, 600)
         central = QWidget()
         self.setCentralWidget(central)
@@ -36,19 +38,21 @@ class MainWindow(QMainWindow):
         self.table_view = TableView()
         self.map_view = MapView(map_url=map_url)
         self.tree_view = TreeView()
-        self.simulator_view = SimulatorView()
+        self.simulator_view = SimulatorView(settings=self._settings)
         self.register_aux_window(self.simulator_view)
 
-        splitter = QSplitter()
-        left_splitter = QSplitter(Qt.Orientation.Vertical)
+        self._main_splitter = QSplitter()
+        self._left_splitter = QSplitter(Qt.Orientation.Vertical)
 
-        left_splitter.addWidget(self.tree_view)
-        left_splitter.addWidget(self.table_view)
+        self._left_splitter.addWidget(self.tree_view)
+        self._left_splitter.addWidget(self.table_view)
         self.table_view.hide()
-        splitter.addWidget(left_splitter)
-        splitter.addWidget(self.map_view)
-        splitter.setSizes([500, 500])
-        layout.addWidget(splitter)
+        self._main_splitter.addWidget(self._left_splitter)
+        self._main_splitter.addWidget(self.map_view)
+        self._main_splitter.setSizes([500, 500])
+        layout.addWidget(self._main_splitter)
+
+        self._restore_window_settings()
 
     def _create_menu_bar(self) -> None:
         self.menu_bar = self.menuBar()
@@ -86,10 +90,43 @@ class MainWindow(QMainWindow):
             self._aux_windows.append(window)
 
     def closeEvent(self, event: QCloseEvent) -> None:
+        self._save_window_settings()
         for window in self._aux_windows:
             if window.isVisible():
                 window.close()
         super().closeEvent(event)
+
+    def _save_window_settings(self) -> None:
+        if not self.isMaximized():
+            self._settings.setValue('main_window/size', self.size())
+
+        self._settings.setValue('main_window/is_maximized', self.isMaximized())
+        self._settings.setValue('main_window/main_splitter_state', self._main_splitter.saveState())
+        self._settings.setValue('main_window/left_splitter_state', self._left_splitter.saveState())
+        self._settings.sync()
+
+    def _restore_window_settings(self) -> None:
+        saved_size = self._settings.value('main_window/size', type=QSize)
+        if isinstance(saved_size, QSize) and saved_size.isValid():
+            self.resize(saved_size)
+
+        is_maximized = self._settings.value('main_window/is_maximized', False, type=bool)
+        if is_maximized:
+            self.showMaximized()
+
+        main_splitter_state = self._settings.value(
+            'main_window/main_splitter_state',
+            type=QByteArray,
+        )
+        if isinstance(main_splitter_state, QByteArray) and not main_splitter_state.isEmpty():
+            self._main_splitter.restoreState(main_splitter_state)
+
+        left_splitter_state = self._settings.value(
+            'main_window/left_splitter_state',
+            type=QByteArray,
+        )
+        if isinstance(left_splitter_state, QByteArray) and not left_splitter_state.isEmpty():
+            self._left_splitter.restoreState(left_splitter_state)
 
     def _create_status_bar(self) -> None:
         self.status_bar = self.statusBar()

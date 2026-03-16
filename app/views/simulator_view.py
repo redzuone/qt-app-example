@@ -1,6 +1,6 @@
 from typing import Any
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QSettings, Qt, Signal
 from PySide6.QtGui import QCloseEvent, QHideEvent, QShowEvent
 from PySide6.QtWidgets import (
 	QCheckBox,
@@ -121,14 +121,19 @@ class TargetSection(QWidget):
 	def target_id(self) -> int:
 		return self._target_id_input.value()
 
+	def set_coordinates(self, latitude: float, longitude: float) -> None:
+		self._latitude_input.setValue(latitude)
+		self._longitude_input.setValue(longitude)
+
 
 class SimulatorView(QWidget):
 	start_simulation_requested = Signal(dict)
 	stop_simulation_requested = Signal(int)
 	visibility_changed = Signal(bool)
 
-	def __init__(self, parent: QWidget | None = None) -> None:
+	def __init__(self, settings: QSettings, parent: QWidget | None = None) -> None:
 		super().__init__(parent, Qt.WindowType.Window)
+		self._settings = settings
 		self.setWindowTitle('Simulator')
 		self.resize(420, 500)
 
@@ -140,11 +145,63 @@ class SimulatorView(QWidget):
 		]
 
 		for section in self.target_sections:
-			section.start_requested.connect(self.start_simulation_requested.emit)
+			section.start_requested.connect(self._on_start_requested)
 			section.stop_requested.connect(self.stop_simulation_requested.emit)
 			layout.addWidget(section)
 
 		layout.addStretch()
+		self._load_recent_coordinates()
+
+	def _on_start_requested(self, target_data: dict[str, Any]) -> None:
+		self._save_recent_coordinates(target_data)
+		self.start_simulation_requested.emit(target_data)
+
+	def _save_recent_coordinates(self, target_data: dict[str, Any]) -> None:
+		try:
+			target_id = int(target_data['target_id'])
+			latitude = float(target_data['latitude'])
+			longitude = float(target_data['longitude'])
+		except (KeyError, TypeError, ValueError):
+			return
+
+		self._settings.setValue('simulator/recent/latitude', latitude)
+		self._settings.setValue('simulator/recent/longitude', longitude)
+		self._settings.setValue(f'simulator/recent/{target_id}/latitude', latitude)
+		self._settings.setValue(f'simulator/recent/{target_id}/longitude', longitude)
+		self._settings.sync()
+
+	def _load_recent_coordinates(self) -> None:
+		recent_latitude = self._settings.value('simulator/recent/latitude', type=float)
+		recent_longitude = self._settings.value('simulator/recent/longitude', type=float)
+
+		for section in self.target_sections:
+			target_id = section.target_id()
+			latitude = self._settings.value(
+				f'simulator/recent/{target_id}/latitude',
+				recent_latitude,
+				type=float,
+			)
+			longitude = self._settings.value(
+				f'simulator/recent/{target_id}/longitude',
+				recent_longitude,
+				type=float,
+			)
+
+			if latitude is None or longitude is None:
+				continue
+
+			if not isinstance(latitude, (int, float, str)):
+				continue
+			if not isinstance(longitude, (int, float, str)):
+				continue
+
+			try:
+				section.set_coordinates(
+					latitude=float(latitude),
+					longitude=float(longitude),
+				)
+			except (TypeError, ValueError):
+				continue
 
 	def set_target_running(self, target_id: int, running: bool) -> None:
 		for section in self.target_sections:
