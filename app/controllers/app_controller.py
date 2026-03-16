@@ -47,6 +47,9 @@ class AppController:
         simulator_view.stop_simulation_requested.connect(
             simulator_service.stop_simulation
         )
+        simulator_view.stop_all_simulation_requested.connect(
+            simulator_service.stop_all
+        )
 
         simulator_service.simulation_started.connect(
             lambda target_id: simulator_view.set_target_running(target_id, True)

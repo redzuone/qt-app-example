@@ -1,3 +1,4 @@
+import random
 from typing import Any
 
 from PySide6.QtCore import QSettings, Qt, Signal
@@ -129,6 +130,7 @@ class TargetSection(QWidget):
 class SimulatorView(QWidget):
 	start_simulation_requested = Signal(dict)
 	stop_simulation_requested = Signal(int)
+	stop_all_simulation_requested = Signal()
 	visibility_changed = Signal(bool)
 
 	def __init__(self, settings: QSettings, parent: QWidget | None = None) -> None:
@@ -136,8 +138,26 @@ class SimulatorView(QWidget):
 		self._settings = settings
 		self.setWindowTitle('Simulator')
 		self.resize(420, 500)
+		self._next_auto_target_id = 1000
+		self._random = random.Random()
 
 		layout = QVBoxLayout(self)
+
+		self._simulate_multiple_count = QSpinBox()
+		self._simulate_multiple_count.setRange(1, 200)
+		self._simulate_multiple_count.setValue(5)
+
+		self._simulate_multiple_button = QPushButton('Simulate multiple')
+		self._simulate_multiple_button.clicked.connect(self._on_simulate_multiple)
+		self._stop_all_button = QPushButton('Stop all')
+		self._stop_all_button.clicked.connect(self.stop_all_simulation_requested.emit)
+
+		multi_row = QHBoxLayout()
+		multi_row.addWidget(QLabel('Count', self))
+		multi_row.addWidget(self._simulate_multiple_count)
+		multi_row.addWidget(self._simulate_multiple_button)
+		multi_row.addWidget(self._stop_all_button)
+		layout.addLayout(multi_row)
 
 		self.target_sections: list[TargetSection] = [
 			TargetSection(title='Target 1', default_target_id=1),
@@ -155,6 +175,61 @@ class SimulatorView(QWidget):
 	def _on_start_requested(self, target_data: dict[str, Any]) -> None:
 		self._save_recent_coordinates(target_data)
 		self.start_simulation_requested.emit(target_data)
+
+	def _on_simulate_multiple(self) -> None:
+		count = self._simulate_multiple_count.value()
+		base_latitude_value = self._settings.value(
+			'simulator/recent/latitude',
+			0.0,
+			type=float,
+		)
+		base_longitude_value = self._settings.value(
+			'simulator/recent/longitude',
+			0.0,
+			type=float,
+		)
+
+		base_latitude = 0.0
+		base_longitude = 0.0
+
+		if isinstance(base_latitude_value, (int, float, str)):
+			try:
+				base_latitude = float(base_latitude_value)
+			except (TypeError, ValueError):
+				base_latitude = 0.0
+
+		if isinstance(base_longitude_value, (int, float, str)):
+			try:
+				base_longitude = float(base_longitude_value)
+			except (TypeError, ValueError):
+				base_longitude = 0.0
+
+		for _ in range(count):
+			target_id = self._next_available_auto_target_id()
+			latitude = base_latitude + self._random.uniform(-0.03, 0.03)
+			longitude = base_longitude + self._random.uniform(-0.03, 0.03)
+
+			latitude = max(min(latitude, 89.9), -89.9)
+			longitude = ((longitude + 180.0) % 360.0) - 180.0
+
+			target_data = {
+				'target_name': f'Target {target_id}',
+				'target_id': target_id,
+				'latitude': latitude,
+				'longitude': longitude,
+				'type': self._random.choice(['vehicle', 'target']),
+				'static': False,
+			}
+			self._on_start_requested(target_data)
+
+	def _next_available_auto_target_id(self) -> int:
+		manual_ids = {section.target_id() for section in self.target_sections}
+		while self._next_auto_target_id in manual_ids:
+			self._next_auto_target_id += 1
+
+		target_id = self._next_auto_target_id
+		self._next_auto_target_id += 1
+		return target_id
 
 	def _save_recent_coordinates(self, target_data: dict[str, Any]) -> None:
 		try:
