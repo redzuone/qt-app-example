@@ -239,20 +239,41 @@ export function createRuler(map) {
         onAdd() {
             this._container = document.createElement('div');
             this._container.className = 'maplibregl-ctrl maplibregl-ctrl-group';
-            this._content = document.createElement('div');
-            this._content.style.display = 'flex';
-            this._content.style.alignItems = 'center';
-            this._content.style.gap = '4px';
-            this._content.style.padding = '4px 6px';
-            this._content.style.whiteSpace = 'nowrap';
+            this._container.style.display = 'flex';
+            this._container.style.flexDirection = 'column';
 
-            this._container.appendChild(this._content);
+            this._button = document.createElement('button');
+            this._button.className = 'maplibregl-ctrl-icon';
+            this._button.type = 'button';
+            this._button.textContent = 'Ruler';
+            this._button.title = 'Distance ruler';
+            this._button.setAttribute('aria-label', 'Distance ruler');
+            this._button.style.cursor = 'pointer';
+            this._button.style.width = 'auto';
+            this._button.style.padding = '0 10px';
+            this._button.style.font = '12px/29px Helvetica Neue, Arial, Helvetica, sans-serif';
+            this._button.addEventListener('click', function () {
+                this._togglePanel();
+            }.bind(this));
+            this._container.appendChild(this._button);
 
-            this._container.style.background = '#fff';
+            this._panel = document.createElement('div');
+            this._panel.style.display = 'none';
+            this._panel.style.background = '#fff';
+            this._panel.style.padding = '10px';
+            this._panel.style.borderRadius = '4px';
+            this._panel.style.marginTop = '5px';
+            this._panel.style.minWidth = '140px';
+            this._panel.style.boxShadow = '0 0 0 2px rgba(0,0,0,0.1)';
+
+            this._panelRow = document.createElement('div');
+            this._panelRow.style.display = 'flex';
+            this._panelRow.style.alignItems = 'center';
+            this._panelRow.style.gap = '6px';
 
             this._toggleButton = document.createElement('button');
             this._toggleButton.type = 'button';
-            this._toggleButton.textContent = 'Ruler';
+            this._toggleButton.textContent = 'Start';
             this._toggleButton.style.border = 'none';
             this._toggleButton.style.padding = '4px 8px';
             this._toggleButton.style.cursor = 'pointer';
@@ -261,6 +282,7 @@ export function createRuler(map) {
             this._toggleButton.style.height = '24px';
             this._toggleButton.style.display = 'inline-flex';
             this._toggleButton.style.alignItems = 'center';
+            this._toggleButton.style.background = '#fff';
             this._toggleButton.addEventListener('click', function () {
                 toggleRulerMode();
             });
@@ -276,33 +298,40 @@ export function createRuler(map) {
             this._clearButton.style.height = '24px';
             this._clearButton.style.display = 'inline-flex';
             this._clearButton.style.alignItems = 'center';
+            this._clearButton.style.background = '#fff';
             this._clearButton.addEventListener('click', function () {
                 clearRulerRoute();
             });
 
             this._statusText = document.createElement('span');
             this._statusText.textContent = '0 m';
-            this._statusText.style.padding = '0 4px';
             this._statusText.style.font = '12px/20px Helvetica Neue, Arial, Helvetica, sans-serif';
             this._statusText.style.whiteSpace = 'nowrap';
 
-            this._content.appendChild(this._toggleButton);
-            this._content.appendChild(this._clearButton);
-            this._content.appendChild(this._statusText);
+            this._panelRow.appendChild(this._toggleButton);
+            this._panelRow.appendChild(this._clearButton);
+            this._panelRow.appendChild(this._statusText);
+            this._panel.appendChild(this._panelRow);
+            this._container.appendChild(this._panel);
 
             rulerStatusTextUpdater = function (text) {
                 this._statusText.textContent = text;
             }.bind(this);
 
             rulerButtonStateUpdater = function (isEnabled) {
-                this._toggleButton.textContent = isEnabled ? 'Ruler On' : 'Ruler';
+                this._toggleButton.textContent = isEnabled ? 'Stop' : 'Start';
                 this._toggleButton.style.background = isEnabled ? '#e5e7eb' : '#fff';
+                this._button.style.background = isEnabled ? '#e5e7eb' : '#fff';
             }.bind(this);
 
             syncRulerButtonState();
             setRulerData();
 
             return this._container;
+        }
+
+        _togglePanel() {
+            this._panel.style.display = this._panel.style.display === 'none' ? 'block' : 'none';
         }
 
         onRemove() {
