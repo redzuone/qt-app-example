@@ -1,5 +1,6 @@
 import { createRuler } from './ruler.js';
 import { StyleSelectorControl } from './style-selector.js';
+import { createSensorOverlay } from './sensor-overlay.js';
 
 const HELLO_MISSING_THRESHOLD_MS = 6000;
 const HELLO_WATCHDOG_INTERVAL_MS = 1000;
@@ -111,6 +112,7 @@ const map = new maplibregl.Map({
 map.scrollZoom.setWheelZoomRate(1 / 150);
 
 const ruler = createRuler(map);
+const sensorOverlay = createSensorOverlay(map);
 
 map.addControl(
     new maplibregl.NavigationControl({
@@ -474,6 +476,17 @@ function updateTargetTrails(geojson) {
     setTrailsData(geojson);
 }
 
+function setSensorCenter(data) {
+    const lat = Number(data?.latitude);
+    const lng = Number(data?.longitude);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+        console.warn('Invalid set_sensor_center data', data);
+        return;
+    }
+
+    sensorOverlay.setSensorCenter(lat, lng);
+}
+
 function focusTarget(data) {
     const lat = Number(data?.latitude);
     const lng = Number(data?.longitude);
@@ -519,6 +532,10 @@ function connectHeartbeatSocket() {
 
                 if (message.command === 'focus_target' && message.data) {
                     focusTarget(message.data);
+                }
+
+                if (message.command === 'set_sensor_center' && message.data) {
+                    setSensorCenter(message.data);
                 }
 
                 sendWsJson({
@@ -570,6 +587,7 @@ map.on('style.load', function () {
         initializeTargetsLayers();
         initializeTrailsLayers();
         ruler.handleStyleLoad();
+        sensorOverlay.handleStyleLoad();
     } catch (error) {
         console.error('Failed to initialize map layers', error);
     }

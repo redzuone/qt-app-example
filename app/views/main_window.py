@@ -19,6 +19,7 @@ from app.views.toolbar import ToolBar
 class MainWindow(QMainWindow):
     """Main application window."""
     debug_action = Signal(str)
+    settings_requested = Signal()
 
     def __init__(self, map_url: str, settings: QSettings) -> None:
         super().__init__()
@@ -58,6 +59,8 @@ class MainWindow(QMainWindow):
         self.menu_bar = self.menuBar()
 
         file_menu = self.menu_bar.addMenu('File')
+        preferences_menu = file_menu.addMenu('Preferences')
+        preferences_menu.addAction('Settings', self.settings_requested.emit)
         file_menu.addAction('Exit', self.close)
 
         view_menu = self.menu_bar.addMenu('View')

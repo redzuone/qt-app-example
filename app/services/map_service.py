@@ -33,6 +33,18 @@ class MapService:
     def send_json(self, payload: dict[str, Any], timeout_seconds: float = 1.0) -> int:
         return self._server.send_json(payload=payload, timeout_seconds=timeout_seconds)
 
+    def send_json_to_connection(
+        self,
+        connection_id: int,
+        payload: dict[str, Any],
+        timeout_seconds: float = 1.0,
+    ) -> int:
+        return self._server.send_json_to_connection(
+            connection_id=connection_id,
+            payload=payload,
+            timeout_seconds=timeout_seconds,
+        )
+
     def send_cmd(
         self,
         command: str,
@@ -45,6 +57,24 @@ class MapService:
             'data': data or {},
         }
         return self.send_json(payload=payload, timeout_seconds=timeout_seconds)
+
+    def send_cmd_to_connection(
+        self,
+        connection_id: int,
+        command: str,
+        data: dict[str, Any] | None = None,
+        timeout_seconds: float = 1.0,
+    ) -> int:
+        payload: dict[str, Any] = {
+            'type': 'cmd',
+            'command': command,
+            'data': data or {},
+        }
+        return self.send_json_to_connection(
+            connection_id=connection_id,
+            payload=payload,
+            timeout_seconds=timeout_seconds,
+        )
 
     def focus_target(self, target_id: str, latitude: float, longitude: float) -> None:
         """Focus/center map on a specific target.
@@ -63,6 +93,27 @@ class MapService:
             'longitude': longitude,
         }
         self.send_cmd(command='focus_target', data=data)
+
+    def set_sensor_center(
+        self,
+        latitude: float,
+        longitude: float,
+        connection_id: int | None = None,
+    ) -> None:
+        data = {
+            'latitude': latitude,
+            'longitude': longitude,
+        }
+
+        if connection_id is None:
+            self.send_cmd(command='set_sensor_center', data=data)
+            return
+
+        self.send_cmd_to_connection(
+            connection_id=connection_id,
+            command='set_sensor_center',
+            data=data,
+        )
 
     def set_web_message_handler(
         self, handler: IncomingMapMessageHandler | None

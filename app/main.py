@@ -45,6 +45,7 @@ def main() -> None:
         data_store=data_store,
         model=model,
         view=view,
+        settings=settings,
         map_service=map_service,
         simulator_service=simulator_service,
     )

@@ -1,12 +1,16 @@
 import logging
 from typing import Any
 
+from PySide6.QtCore import QSettings
+
 from app.constants.data_schema import SCHEMA
 from app.models.app_model import AppModel
 from app.services.data_store import DataStore
 from app.services.map_service import MapService
 from app.services.simulator_service import SimulatorService
+from app.utils.app_settings import get_sensor_center, set_sensor_center
 from app.views.main_window import MainWindow
+from app.views.settings_dialog import SettingsDialog
 
 logger = logging.getLogger(__name__)
 
@@ -17,12 +21,14 @@ class AppController:
         data_store: DataStore,
         model: AppModel,
         view: MainWindow,
+        settings: QSettings,
         map_service: MapService | None = None,
         simulator_service: SimulatorService | None = None,
     ):
         self._data_store = data_store
         self._model = model
         self._view = view
+        self._settings = settings
         self._map_service = map_service
         self._simulator_service = simulator_service
 
@@ -33,6 +39,7 @@ class AppController:
             self._connect_data_store()
         self._connect_table_view()
         self._connect_tree_view()
+        self._connect_map()
         self._connect_misc_signals()
 
     def _connect_simulator(self) -> None:
@@ -81,8 +88,13 @@ class AppController:
             self._data_store.delete_target
         )
 
+    def _connect_map(self) -> None:
+        if self._map_service is not None:
+            self._map_service.set_web_message_handler(self._handle_map_web_message)
+
     def _connect_misc_signals(self) -> None:
         self._view.debug_action.connect(self._handle_debug_action)
+        self._view.settings_requested.connect(self._open_settings_dialog)
 
     def _on_view_target_on_map(self, target_id: str) -> None:
         '''Handle view target on map request'''
@@ -124,3 +136,28 @@ class AppController:
             self._view.set_map_url(self._map_service.base_url + '/leaflet')
         elif action_name == 'show_maplibre_map':
             self._view.set_map_url(self._map_service.base_url + '/maplibre')
+
+    def _open_settings_dialog(self) -> None:
+        dialog = SettingsDialog(settings=self._settings, parent=self._view)
+        if dialog.exec() == 0:
+            return
+
+        latitude, longitude = dialog.sensor_center()
+        set_sensor_center(self._settings, latitude=latitude, longitude=longitude)
+
+        if self._map_service is not None:
+            self._map_service.set_sensor_center(latitude=latitude, longitude=longitude)
+
+    def _handle_map_web_message(self, connection_id: int, message: dict[str, Any]) -> None:
+        if self._map_service is None:
+            return
+
+        if message.get('type') != 'websocket_connected':
+            return
+
+        latitude, longitude = get_sensor_center(self._settings)
+        self._map_service.set_sensor_center(
+            latitude=latitude,
+            longitude=longitude,
+            connection_id=connection_id,
+        )
