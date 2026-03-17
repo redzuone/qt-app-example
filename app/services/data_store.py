@@ -84,9 +84,17 @@ class DataStore(QObject):
         return latest_row
 
     def get_latest_per_target(self) -> pl.DataFrame:
-        """Get most recent data for each target"""
+        """Get most recent data for each target with first_seen metadata."""
         self._flush_batch()
-        return self._df.group_by(SCHEMA.TARGET_ID).agg(pl.all().sort_by(SCHEMA.DATETIME).last())
+
+        latest_df = self._df.group_by(SCHEMA.TARGET_ID).agg(
+            pl.all().sort_by(SCHEMA.DATETIME).last()
+        )
+        first_seen_df = self._df.group_by(SCHEMA.TARGET_ID).agg(
+            pl.col(SCHEMA.DATETIME).min().alias(SCHEMA.FIRST_SEEN)
+        )
+        latest_df = latest_df.join(first_seen_df, on=SCHEMA.TARGET_ID, how='left')
+        return latest_df
 
     def get_trail_points_per_target(self, max_points_per_target: int = 200) -> pl.DataFrame:
         """Get recent ordered trail points per target.

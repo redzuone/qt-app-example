@@ -69,7 +69,11 @@ class TargetTreeWidget(QTreeWidget):
             self.clear()
             self._item_by_id.clear()
             return
-        df = df.sort(SCHEMA.DATETIME, descending=False)
+        if SCHEMA.FIRST_SEEN in df.columns:
+            sort_columns = [SCHEMA.FIRST_SEEN, SCHEMA.TARGET_ID]
+        else:
+            sort_columns = [SCHEMA.DATETIME, SCHEMA.TARGET_ID]
+        df = df.sort(sort_columns, descending=False)
         target_id_col = self._get_column_index(SCHEMA.TARGET_ID)
 
         # Store current selection before modifying tree
@@ -153,6 +157,7 @@ class TargetTreeWidget(QTreeWidget):
     ) -> None:
         """Rebuild child items for a parent from row data"""
         fields = [
+            (SCHEMA.FIRST_SEEN, 'First Seen'),
             (SCHEMA.TYPE, 'Type'),
             (SCHEMA.LATITUDE, 'Latitude'),
             (SCHEMA.LONGITUDE, 'Longitude'),
@@ -267,7 +272,11 @@ class TreeView(QWidget):
 
     def update_tree(self, df: pl.DataFrame) -> None:
         """Update paged tree data and keep current page when possible."""
-        self._latest_df = df.sort(SCHEMA.DATETIME, descending=False)
+        if SCHEMA.FIRST_SEEN in df.columns:
+            sort_columns = [SCHEMA.FIRST_SEEN, SCHEMA.TARGET_ID]
+        else:
+            sort_columns = [SCHEMA.DATETIME, SCHEMA.TARGET_ID]
+        self._latest_df = df.sort(sort_columns, descending=False)
         self._page_size = max(1, self._calculate_page_size())
 
         row_count = self._latest_df.height

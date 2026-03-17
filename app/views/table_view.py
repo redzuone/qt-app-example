@@ -14,6 +14,7 @@ class TableView(QTableWidget):
     
     COLUMN_LABELS = {
         SCHEMA.DATETIME: 'Date/Time',
+        SCHEMA.FIRST_SEEN: 'First Seen',
         SCHEMA.TYPE: 'Type',
         SCHEMA.TARGET_ID: 'Target ID',
         SCHEMA.TARGET_NAME: 'Target Name',
