@@ -1,14 +1,18 @@
+from dataclasses import dataclass
+
 from PySide6.QtCore import QSettings
 
 from app.constants import APP_ID, APP_ORGANIZATION
 
-DEFAULT_SENSOR_CENTER_LATITUDE = 0.0
-DEFAULT_SENSOR_CENTER_LONGITUDE = 0.0
+
+@dataclass
+class AppSettings:
+    sensor_latitude: float = 0.0
+    sensor_longitude: float = 0.0
 
 
 def create_app_settings() -> QSettings:
-    """Create user-scoped INI settings for the app.
-    """
+    """Create user-scoped INI settings for the app."""
     return QSettings(
         QSettings.Format.IniFormat,
         QSettings.Scope.UserScope,
@@ -17,27 +21,25 @@ def create_app_settings() -> QSettings:
     )
 
 
-def get_sensor_center(settings: QSettings) -> tuple[float, float]:
-    """Return the persisted sensor center, falling back to the app default."""
-    latitude_value = settings.value(
-        'sensor/center/latitude',
-        settings.value('map/center/latitude', DEFAULT_SENSOR_CENTER_LATITUDE),
+def load_settings(qs: QSettings) -> AppSettings:
+    """Load persisted settings into a typed dataclass."""
+    return AppSettings(
+        sensor_latitude=_coerce_float(
+            qs.value('sensor/center/latitude', qs.value('map/center/latitude', 0.0)),
+            0.0,
+        ),
+        sensor_longitude=_coerce_float(
+            qs.value('sensor/center/longitude', qs.value('map/center/longitude', 0.0)),
+            0.0,
+        ),
     )
-    longitude_value = settings.value(
-        'sensor/center/longitude',
-        settings.value('map/center/longitude', DEFAULT_SENSOR_CENTER_LONGITUDE),
-    )
-
-    latitude = _coerce_float(latitude_value, DEFAULT_SENSOR_CENTER_LATITUDE)
-    longitude = _coerce_float(longitude_value, DEFAULT_SENSOR_CENTER_LONGITUDE)
-
-    return latitude, longitude
 
 
-def set_sensor_center(settings: QSettings, latitude: float, longitude: float) -> None:
-    settings.setValue('sensor/center/latitude', latitude)
-    settings.setValue('sensor/center/longitude', longitude)
-    settings.sync()
+def save_settings(qs: QSettings, settings: AppSettings) -> None:
+    """Persist the typed settings dataclass."""
+    qs.setValue('sensor/center/latitude', settings.sensor_latitude)
+    qs.setValue('sensor/center/longitude', settings.sensor_longitude)
+    qs.sync()
 
 
 def _coerce_float(value: object, fallback: float) -> float:

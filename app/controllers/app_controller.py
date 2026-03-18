@@ -8,7 +8,7 @@ from app.models.app_model import AppModel
 from app.services.data_store import DataStore
 from app.services.map_service import MapService
 from app.services.simulator_service import SimulatorService
-from app.utils.app_settings import get_sensor_center, set_sensor_center
+from app.utils.app_settings import AppSettings, load_settings, save_settings
 from app.views.main_window import MainWindow
 from app.views.settings_dialog import SettingsDialog
 
@@ -28,7 +28,8 @@ class AppController:
         self._data_store = data_store
         self._model = model
         self._view = view
-        self._settings = settings
+        self._qs = settings
+        self._app_settings: AppSettings = load_settings(settings)
         self._map_service = map_service
         self._simulator_service = simulator_service
 
@@ -138,12 +139,14 @@ class AppController:
             self._view.set_map_url(self._map_service.base_url + '/maplibre')
 
     def _open_settings_dialog(self) -> None:
-        dialog = SettingsDialog(settings=self._settings, parent=self._view)
+        dialog = SettingsDialog(app_settings=self._app_settings, parent=self._view)
         if dialog.exec() == 0:
             return
 
         latitude, longitude = dialog.sensor_center()
-        set_sensor_center(self._settings, latitude=latitude, longitude=longitude)
+        self._app_settings.sensor_latitude = latitude
+        self._app_settings.sensor_longitude = longitude
+        save_settings(self._qs, self._app_settings)
 
         if self._map_service is not None:
             self._map_service.set_sensor_center(latitude=latitude, longitude=longitude)
@@ -155,7 +158,8 @@ class AppController:
         if message.get('type') != 'websocket_connected':
             return
 
-        latitude, longitude = get_sensor_center(self._settings)
+        latitude = self._app_settings.sensor_latitude
+        longitude = self._app_settings.sensor_longitude
         self._map_service.set_sensor_center(
             latitude=latitude,
             longitude=longitude,
