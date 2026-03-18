@@ -1,6 +1,7 @@
 import { createRuler } from './ruler.js';
 import { StyleSelectorControl } from './style-selector.js';
 import { createSensorOverlay } from './sensor-overlay.js';
+import { createMapBrightness } from './map-brightness.js';
 
 const HELLO_MISSING_THRESHOLD_MS = 6000;
 const HELLO_WATCHDOG_INTERVAL_MS = 1000;
@@ -113,6 +114,7 @@ map.scrollZoom.setWheelZoomRate(1 / 150);
 
 const ruler = createRuler(map);
 const sensorOverlay = createSensorOverlay(map);
+const mapBrightnessOverlay = createMapBrightness(map);
 
 map.addControl(
     new maplibregl.NavigationControl({
@@ -488,6 +490,16 @@ function setSensorCenter(data) {
     sensorOverlay.setSensorCenter(lat, lng, fit);
 }
 
+function setMapBrightness(data) {
+    const brightness = Number(data?.brightness);
+    if (!Number.isFinite(brightness)) {
+        console.warn('Invalid set_map_brightness data', data);
+        return;
+    }
+
+    mapBrightnessOverlay.setBrightness(brightness);
+}
+
 function focusTarget(data) {
     const lat = Number(data?.latitude);
     const lng = Number(data?.longitude);
@@ -539,6 +551,10 @@ function connectHeartbeatSocket() {
                     setSensorCenter(message.data);
                 }
 
+                if (message.command === 'set_map_brightness' && message.data) {
+                    setMapBrightness(message.data);
+                }
+
                 sendWsJson({
                     type: 'cmd_ack',
                     command: message.command,
@@ -587,6 +603,7 @@ map.on('style.load', function () {
         trailsLayerReady = false;
         initializeTargetsLayers();
         initializeTrailsLayers();
+        mapBrightnessOverlay.handleStyleLoad();
         ruler.handleStyleLoad();
         sensorOverlay.handleStyleLoad();
     } catch (error) {

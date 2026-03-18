@@ -28,9 +28,16 @@ class SettingsDialog(QDialog):
         self._sensor_center_longitude_input.setSingleStep(0.0001)
         self._sensor_center_longitude_input.setValue(app_settings.sensor_longitude)
 
+        self._map_brightness_input = QDoubleSpinBox(self)
+        self._map_brightness_input.setRange(0.2, 1.0)
+        self._map_brightness_input.setDecimals(2)
+        self._map_brightness_input.setSingleStep(0.05)
+        self._map_brightness_input.setValue(app_settings.map_brightness)
+
         form_layout = QFormLayout()
         form_layout.addRow('Sensor centre latitude', self._sensor_center_latitude_input)
         form_layout.addRow('Sensor centre longitude', self._sensor_center_longitude_input)
+        form_layout.addRow('Map brightness', self._map_brightness_input)
 
         button_box = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok
@@ -49,3 +56,6 @@ class SettingsDialog(QDialog):
             self._sensor_center_latitude_input.value(),
             self._sensor_center_longitude_input.value(),
         )
+
+    def map_brightness(self) -> float:
+        return self._map_brightness_input.value()

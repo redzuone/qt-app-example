@@ -186,8 +186,10 @@ class AppController:
             return
 
         latitude, longitude = dialog.sensor_center()
+        map_brightness = dialog.map_brightness()
         self._app_settings.sensor_latitude = latitude
         self._app_settings.sensor_longitude = longitude
+        self._app_settings.map_brightness = map_brightness
         save_settings(self._qs, self._app_settings)
 
         if self._map_service is not None:
@@ -195,6 +197,10 @@ class AppController:
                 latitude=latitude,
                 longitude=longitude,
                 fit=True,
+            )
+            self._map_service.send_cmd(
+                command='set_map_brightness',
+                data={'brightness': map_brightness},
             )
 
     def _handle_map_web_message(self, connection_id: int, message: dict[str, Any]) -> None:
@@ -211,4 +217,9 @@ class AppController:
             longitude=longitude,
             connection_id=connection_id,
             fit=True,
+        )
+        self._map_service.send_cmd_to_connection(
+            connection_id=connection_id,
+            command='set_map_brightness',
+            data={'brightness': self._app_settings.map_brightness},
         )

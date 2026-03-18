@@ -117,6 +117,25 @@ class MapService:
             data=data,
         )
 
+    def set_map_brightness(
+        self,
+        brightness: float,
+        connection_id: int | None = None,
+    ) -> None:
+        data = {
+            'brightness': brightness,
+        }
+
+        if connection_id is None:
+            self.send_cmd(command='set_map_brightness', data=data)
+            return
+
+        self.send_cmd_to_connection(
+            connection_id=connection_id,
+            command='set_map_brightness',
+            data=data,
+        )
+
     def set_web_message_handler(
         self, handler: IncomingMapMessageHandler | None
     ) -> None:
