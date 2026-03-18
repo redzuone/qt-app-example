@@ -32,6 +32,8 @@ class AppController:
         self._app_settings: AppSettings = load_settings(settings)
         self._map_service = map_service
         self._simulator_service = simulator_service
+        self._show_full_trails = False
+        self._locked_trail_target_ids: set[str] = set()
 
         # Connect signals by feature groups, regardless of direction
         if self._simulator_service is not None:
@@ -88,6 +90,9 @@ class AppController:
         tree_view.delete_target_by_id.connect(
             self._data_store.delete_target
         )
+        tree_view.lock_trail_to_target.connect(self._on_lock_trail_to_target)
+        tree_view.unlock_trail_from_target.connect(self._on_unlock_trail_from_target)
+        tree_view.clear_all_trail_locks_requested.connect(self._on_clear_all_trail_locks)
 
     def _connect_map(self) -> None:
         if self._map_service is not None:
@@ -96,6 +101,10 @@ class AppController:
     def _connect_misc_signals(self) -> None:
         self._view.debug_action.connect(self._handle_debug_action)
         self._view.settings_requested.connect(self._open_settings_dialog)
+        self._view.trail_full_trail_toggled.connect(self._on_trail_mode_toggled)
+        self._view.clear_all_trail_locks_requested.connect(
+            self._on_clear_all_trail_locks
+        )
 
     def _on_view_target_on_map(self, target_id: str) -> None:
         '''Handle view target on map request'''
@@ -127,8 +136,41 @@ class AppController:
             self._view.tree_view.update_tree(latest_df)
         if self._map_service is not None:
             self._map_service.update_targets(latest_df)
-            trail_df = self._data_store.get_trail_points_per_target()
-            self._map_service.update_trails(trail_df)
+            self._update_map_trails()
+
+    def _update_map_trails(self) -> None:
+        if self._map_service is None:
+            return
+
+        max_points_per_target = 0 if self._show_full_trails else 200
+        trail_df = self._data_store.get_trail_points_per_target(
+            max_points_per_target,
+            self._locked_trail_target_ids or None,
+        )
+        self._map_service.update_trails(
+            trail_df,
+            not self._show_full_trails,
+        )
+
+    def _on_trail_mode_toggled(self, enabled: bool) -> None:
+        self._show_full_trails = enabled
+        self._update_map_trails()
+
+    def _on_lock_trail_to_target(self, target_id: str) -> None:
+        self._locked_trail_target_ids.add(target_id)
+        self._update_map_trails()
+
+    def _on_unlock_trail_from_target(self, target_id: str) -> None:
+        if target_id not in self._locked_trail_target_ids:
+            return
+        self._locked_trail_target_ids.remove(target_id)
+        self._update_map_trails()
+
+    def _on_clear_all_trail_locks(self) -> None:
+        if not self._locked_trail_target_ids:
+            return
+        self._locked_trail_target_ids.clear()
+        self._update_map_trails()
 
     def _handle_debug_action(self, action_name: str) -> None:
         if self._map_service is None:

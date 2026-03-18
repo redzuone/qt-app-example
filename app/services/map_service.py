@@ -162,8 +162,8 @@ class MapService:
         
         self.send_cmd(command='update_targets', data=geojson)
 
-    def update_trails(self, df: pl.DataFrame) -> None:
-        """Convert per-point DataFrame to per-target segmented trail GeoJSON."""
+    def update_trails(self, df: pl.DataFrame, fade_segments: bool = True) -> None:
+        """Convert per-point DataFrame to per-target trail GeoJSON."""
         if df.is_empty():
             geojson: dict[str, Any] = {'type': 'FeatureCollection', 'features': []}
             self.send_cmd(command='update_trails', data=geojson)
@@ -192,6 +192,21 @@ class MapService:
         features = []
         for target_id, coordinates in target_points.items():
             if len(coordinates) < 2:
+                continue
+
+            if not fade_segments:
+                features.append(
+                    {
+                        'type': 'Feature',
+                        'geometry': {
+                            'type': 'LineString',
+                            'coordinates': coordinates,
+                        },
+                        'properties': {
+                            **target_props[target_id],
+                        },
+                    }
+                )
                 continue
 
             total_segments = len(coordinates) - 1

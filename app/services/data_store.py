@@ -96,19 +96,29 @@ class DataStore(QObject):
         latest_df = latest_df.join(first_seen_df, on=SCHEMA.TARGET_ID, how='left')
         return latest_df
 
-    def get_trail_points_per_target(self, max_points_per_target: int = 200) -> pl.DataFrame:
+    def get_trail_points_per_target(
+        self,
+        max_points_per_target: int = 200,
+        target_ids: set[str] | None = None,
+    ) -> pl.DataFrame:
         """Get recent ordered trail points per target.
 
         Returns a DataFrame with one row per point, sorted by target and datetime,
-        containing only valid coordinates.
+        containing only valid coordinates. Pass max_points_per_target <= 0 to
+        keep full history.
         """
         self._flush_batch()
 
         if self._df.is_empty():
             return self._df.clear()
 
+        trail_df = self._df
+
+        if target_ids:
+            trail_df = self._df.filter(pl.col(SCHEMA.TARGET_ID).is_in(sorted(target_ids)))
+
         trail_df = (
-            self._df
+            trail_df
             .filter(
                 pl.col(SCHEMA.LATITUDE).is_not_null()
                 & pl.col(SCHEMA.LONGITUDE).is_not_null()

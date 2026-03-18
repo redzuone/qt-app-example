@@ -20,6 +20,8 @@ class MainWindow(QMainWindow):
     """Main application window."""
     debug_action = Signal(str)
     settings_requested = Signal()
+    trail_full_trail_toggled = Signal(bool)
+    clear_all_trail_locks_requested = Signal()
 
     def __init__(self, map_url: str, settings: QSettings) -> None:
         super().__init__()
@@ -66,6 +68,19 @@ class MainWindow(QMainWindow):
         view_menu = self.menu_bar.addMenu('View')
         view_menu.addAction('Table', lambda: self._toggle_visibility(self.table_view))
         view_menu.addAction('Tree', lambda: self._toggle_visibility(self.tree_view))
+        trails_submenu = view_menu.addMenu('Trails')
+
+        self._full_trail_action = QAction('Full Trail', self)
+        self._full_trail_action.setCheckable(True)
+        self._full_trail_action.setChecked(False)
+        self._full_trail_action.toggled.connect(self.trail_full_trail_toggled.emit)
+        trails_submenu.addAction(self._full_trail_action)
+
+        clear_trail_locks_action = QAction('Clear All Trail Locks', self)
+        clear_trail_locks_action.triggered.connect(
+            self.clear_all_trail_locks_requested.emit
+        )
+        trails_submenu.addAction(clear_trail_locks_action)
 
         debug_menu = self.menu_bar.addMenu('Debug')
         self.simulator_action = QAction('Show Simulator', self)

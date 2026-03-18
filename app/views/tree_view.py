@@ -23,6 +23,9 @@ from app.utils.target_color import target_color_hex, target_text_color_hex
 class TargetTreeWidget(QTreeWidget):
     delete_target_by_id = Signal(str)
     view_target_on_map = Signal(str)
+    lock_trail_to_target = Signal(str)
+    unlock_trail_from_target = Signal(str)
+    clear_all_trail_locks_requested = Signal()
 
     COLUMN_LABELS = {
         SCHEMA.TARGET_NAME: 'Name',
@@ -218,6 +221,24 @@ class TargetTreeWidget(QTreeWidget):
         )
         menu.addAction(view_map_action)
 
+        lock_trail_action = QAction('Lock Trail to This Target', self)
+        lock_trail_action.triggered.connect(
+            lambda: self.lock_trail_to_target.emit(target_id)
+        )
+        menu.addAction(lock_trail_action)
+
+        unlock_trail_action = QAction('Unlock Trail from This Target', self)
+        unlock_trail_action.triggered.connect(
+            lambda: self.unlock_trail_from_target.emit(target_id)
+        )
+        menu.addAction(unlock_trail_action)
+
+        clear_trail_lock_action = QAction('Clear All Trail Locks', self)
+        clear_trail_lock_action.triggered.connect(
+            self.clear_all_trail_locks_requested.emit
+        )
+        menu.addAction(clear_trail_lock_action)
+
         delete_action = QAction('Delete Target', self)
         delete_action.triggered.connect(
             lambda: self.delete_target_by_id.emit(target_id)
@@ -230,6 +251,9 @@ class TargetTreeWidget(QTreeWidget):
 class TreeView(QWidget):
     delete_target_by_id = Signal(str)
     view_target_on_map = Signal(str)
+    lock_trail_to_target = Signal(str)
+    unlock_trail_from_target = Signal(str)
+    clear_all_trail_locks_requested = Signal()
     RESIZE_DEBOUNCE_MS = 120
 
     def __init__(self) -> None:
@@ -241,6 +265,13 @@ class TreeView(QWidget):
         self._tree = TargetTreeWidget()
         self._tree.view_target_on_map.connect(self.view_target_on_map.emit)
         self._tree.delete_target_by_id.connect(self.delete_target_by_id.emit)
+        self._tree.lock_trail_to_target.connect(self.lock_trail_to_target.emit)
+        self._tree.unlock_trail_from_target.connect(
+            self.unlock_trail_from_target.emit
+        )
+        self._tree.clear_all_trail_locks_requested.connect(
+            self.clear_all_trail_locks_requested.emit
+        )
 
         pager_layout = QHBoxLayout()
         pager_layout.setContentsMargins(4, 0, 4, 0)
