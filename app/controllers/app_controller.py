@@ -191,7 +191,11 @@ class AppController:
         save_settings(self._qs, self._app_settings)
 
         if self._map_service is not None:
-            self._map_service.set_sensor_center(latitude=latitude, longitude=longitude)
+            self._map_service.set_sensor_center(
+                latitude=latitude,
+                longitude=longitude,
+                fit=True,
+            )
 
     def _handle_map_web_message(self, connection_id: int, message: dict[str, Any]) -> None:
         if self._map_service is None:
@@ -206,4 +210,5 @@ class AppController:
             latitude=latitude,
             longitude=longitude,
             connection_id=connection_id,
+            fit=True,
         )

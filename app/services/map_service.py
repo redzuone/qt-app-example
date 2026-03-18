@@ -99,10 +99,12 @@ class MapService:
         latitude: float,
         longitude: float,
         connection_id: int | None = None,
+        fit: bool = False,
     ) -> None:
         data = {
             'latitude': latitude,
             'longitude': longitude,
+            'fit': fit,
         }
 
         if connection_id is None:

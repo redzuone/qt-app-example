@@ -479,12 +479,13 @@ function updateTargetTrails(geojson) {
 function setSensorCenter(data) {
     const lat = Number(data?.latitude);
     const lng = Number(data?.longitude);
+    const fit = Boolean(data?.fit);
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
         console.warn('Invalid set_sensor_center data', data);
         return;
     }
 
-    sensorOverlay.setSensorCenter(lat, lng);
+    sensorOverlay.setSensorCenter(lat, lng, fit);
 }
 
 function focusTarget(data) {

@@ -81,10 +81,31 @@ export function createSensorOverlay(map) {
         }
     }
 
-    function setSensorCenter(lat, lng) {
+    function fitOverlayToScreen(lat, lng) {
+        const geojson = buildGeoJson(lat, lng);
+        const bounds = new maplibregl.LngLatBounds();
+
+        geojson.features.forEach(function (feature) {
+            feature.geometry.coordinates.forEach(function (coordinate) {
+                bounds.extend(coordinate);
+            });
+        });
+
+        if (!bounds.isEmpty()) {
+            map.fitBounds(bounds, {
+                padding: 40,
+                duration: 0,
+            });
+        }
+    }
+
+    function setSensorCenter(lat, lng, fit = false) {
         sensorCenter = { lat, lng };
-        map.easeTo({ center: [lng, lat], duration: 600 });
         sync();
+
+        if (fit) {
+            fitOverlayToScreen(lat, lng);
+        }
     }
 
     function handleStyleLoad() {
