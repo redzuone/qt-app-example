@@ -146,6 +146,7 @@ class AppController:
         self._view.clear_all_trail_locks_requested.connect(
             self._on_clear_all_trail_locks
         )
+        self._view.map_target_labels_toggled.connect(self._on_map_target_labels_toggled)
 
     def _on_view_target_on_map(self, target_id: str) -> None:
         '''Handle view target on map request'''
@@ -199,6 +200,12 @@ class AppController:
     def _on_trail_mode_toggled(self, enabled: bool) -> None:
         self._show_full_trails = enabled
         self._update_map_trails()
+
+    def _on_map_target_labels_toggled(self, enabled: bool) -> None:
+        if self._map_service is None:
+            return
+        self._map_service.send_cmd('set_target_labels', {'show': enabled})
+
 
     def _on_lock_trail_to_target(self, target_id: str) -> None:
         self._locked_trail_target_ids.add(target_id)

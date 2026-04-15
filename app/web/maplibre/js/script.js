@@ -15,6 +15,7 @@ const TARGETS_UNKNOWN_CIRCLE_LAYER_ID = 'targets-unknown-circle-layer';
 const TARGETS_RAW_LAYER_ID = 'targets-raw-layer';
 const TARGETS_VEHICLE_LAYER_ID = 'targets-vehicle-layer';
 const TARGETS_ICON_LAYER_ID = 'targets-icon-layer';
+const TARGETS_LABEL_LAYER_ID = 'targets-label-layer';
 const VEHICLE_ICON_ID = 'vehicle-icon';
 const TARGET_ICON_ID = 'target-icon';
 const RAW_ICON_ID = 'raw-icon';
@@ -102,6 +103,7 @@ let pendingTrailsGeoJson = {
 let rawIconReady = false;
 let vehicleIconReady = false;
 let targetIconReady = false;
+let targetLabelsVisible = false;
 
 const map = new maplibregl.Map({
     container: 'map',
@@ -243,6 +245,7 @@ function setTrailsData(geojson) {
 
 function refreshTargetRenderLayers() {
     const layerIds = [
+        TARGETS_LABEL_LAYER_ID,
         TARGETS_UNKNOWN_CIRCLE_LAYER_ID,
         TARGETS_RAW_LAYER_ID,
         TARGETS_VEHICLE_LAYER_ID,
@@ -365,6 +368,26 @@ function refreshTargetRenderLayers() {
             },
         });
     }
+
+    map.addLayer({
+        id: TARGETS_LABEL_LAYER_ID,
+        type: 'symbol',
+        source: TARGETS_SOURCE_ID,
+        layout: {
+            'text-field': ['get', 'target_id'],
+            'text-size': 11,
+            'text-offset': [0, 1.2],
+            'text-anchor': 'top',
+            'text-allow-overlap': true,
+            'text-ignore-placement': true,
+            'visibility': targetLabelsVisible ? 'visible' : 'none',
+        },
+        paint: {
+            'text-color': '#ffffff',
+            'text-halo-color': '#000000',
+            'text-halo-width': 1.5,
+        },
+    });
 }
 
 function tryRegisterMapImage(imageId, imagePath, onReady, imageOptions) {
@@ -470,6 +493,14 @@ function initializeTrailsLayers() {
     setTrailsData(pendingTrailsGeoJson);
 }
 
+function setTargetLabels(data) {
+    const show = Boolean(data?.show);
+    targetLabelsVisible = show;
+    if (map.getLayer(TARGETS_LABEL_LAYER_ID)) {
+        map.setLayoutProperty(TARGETS_LABEL_LAYER_ID, 'visibility', show ? 'visible' : 'none');
+    }
+}
+
 function updateTargetMarkers(geojson) {
     setTargetsData(geojson);
 }
@@ -553,6 +584,10 @@ function connectHeartbeatSocket() {
 
                 if (message.command === 'set_map_brightness' && message.data) {
                     setMapBrightness(message.data);
+                }
+
+                if (message.command === 'set_target_labels' && message.data) {
+                    setTargetLabels(message.data);
                 }
 
                 sendWsJson({

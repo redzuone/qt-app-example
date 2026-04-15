@@ -22,6 +22,7 @@ class MainWindow(QMainWindow):
     settings_requested = Signal()
     trail_full_trail_toggled = Signal(bool)
     clear_all_trail_locks_requested = Signal()
+    map_target_labels_toggled = Signal(bool)
 
     def __init__(self, map_url: str, settings: QSettings) -> None:
         super().__init__()
@@ -68,8 +69,15 @@ class MainWindow(QMainWindow):
         view_menu = self.menu_bar.addMenu('View')
         view_menu.addAction('Table', lambda: self._toggle_visibility(self.table_view))
         view_menu.addAction('Tree', lambda: self._toggle_visibility(self.tree_view))
-        trails_submenu = view_menu.addMenu('Trails')
+        map_submenu = view_menu.addMenu('Map')
 
+        self._target_labels_action = QAction('Target Labels', self)
+        self._target_labels_action.setCheckable(True)
+        self._target_labels_action.setChecked(False)
+        self._target_labels_action.toggled.connect(self.map_target_labels_toggled.emit)
+        map_submenu.addAction(self._target_labels_action)
+
+        trails_submenu = map_submenu.addMenu('Trails')
         self._full_trail_action = QAction('Full Trail', self)
         self._full_trail_action.setCheckable(True)
         self._full_trail_action.setChecked(False)
