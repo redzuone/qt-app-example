@@ -5,6 +5,7 @@ import polars as pl
 from PySide6.QtCore import QPoint, Qt, QTimer, Signal
 from PySide6.QtGui import QAction, QColor, QResizeEvent
 from PySide6.QtWidgets import (
+    QComboBox,
     QHBoxLayout,
     QHeaderView,
     QLabel,
@@ -72,11 +73,6 @@ class TargetTreeWidget(QTreeWidget):
             self.clear()
             self._item_by_id.clear()
             return
-        if SCHEMA.FIRST_SEEN in df.columns:
-            sort_columns = [SCHEMA.FIRST_SEEN, SCHEMA.TARGET_ID]
-        else:
-            sort_columns = [SCHEMA.DATETIME, SCHEMA.TARGET_ID]
-        df = df.sort(sort_columns, descending=False)
         target_id_col = self._get_column_index(SCHEMA.TARGET_ID)
 
         # Store current selection before modifying tree
@@ -255,6 +251,18 @@ class TreeView(QWidget):
     unlock_trail_from_target = Signal(str)
     clear_all_trail_locks_requested = Signal()
     RESIZE_DEBOUNCE_MS = 120
+    SORT_OPTIONS: list[tuple[str, str]] = [
+        ('Date/Time', SCHEMA.DATETIME),
+        ('First Seen', SCHEMA.FIRST_SEEN),
+        ('Type', SCHEMA.TYPE),
+        ('Target ID', SCHEMA.TARGET_ID),
+        ('Height', SCHEMA.HEIGHT),
+        ('Speed', SCHEMA.SPEED),
+    ]
+    SORT_DIRECTION_OPTIONS: list[tuple[str, bool]] = [
+        ('Ascending', False),
+        ('Descending', True),
+    ]
 
     def __init__(self) -> None:
         super().__init__()
@@ -273,6 +281,30 @@ class TreeView(QWidget):
             self.clear_all_trail_locks_requested.emit
         )
 
+        sort_layout = QHBoxLayout()
+        sort_layout.setContentsMargins(4, 0, 4, 0)
+        sort_layout.setSpacing(8)
+
+        self._sort_label = QLabel('Sort by')
+        self._sort_selector = QComboBox()
+        for label, schema_key in self.SORT_OPTIONS:
+            self._sort_selector.addItem(label, schema_key)
+        self._sort_selector.currentIndexChanged.connect(self._on_sort_changed)
+
+        self._sort_direction_label = QLabel('Order')
+        self._sort_direction_selector = QComboBox()
+        for label, is_descending in self.SORT_DIRECTION_OPTIONS:
+            self._sort_direction_selector.addItem(label, is_descending)
+        self._sort_direction_selector.currentIndexChanged.connect(
+            self._on_sort_changed
+        )
+
+        sort_layout.addWidget(self._sort_label)
+        sort_layout.addWidget(self._sort_selector)
+        sort_layout.addWidget(self._sort_direction_label)
+        sort_layout.addWidget(self._sort_direction_selector)
+        sort_layout.addStretch(1)
+
         pager_layout = QHBoxLayout()
         pager_layout.setContentsMargins(4, 0, 4, 0)
         pager_layout.setSpacing(8)
@@ -289,6 +321,7 @@ class TreeView(QWidget):
         pager_layout.addWidget(self._page_label, 1)
         pager_layout.addWidget(self._next_button)
 
+        layout.addLayout(sort_layout)
         layout.addWidget(self._tree)
         layout.addLayout(pager_layout)
 
@@ -303,11 +336,7 @@ class TreeView(QWidget):
 
     def update_tree(self, df: pl.DataFrame) -> None:
         """Update paged tree data and keep current page when possible."""
-        if SCHEMA.FIRST_SEEN in df.columns:
-            sort_columns = [SCHEMA.FIRST_SEEN, SCHEMA.TARGET_ID]
-        else:
-            sort_columns = [SCHEMA.DATETIME, SCHEMA.TARGET_ID]
-        self._latest_df = df.sort(sort_columns, descending=False)
+        self._latest_df = self._sort_df(df)
         self._page_size = max(1, self._calculate_page_size())
 
         row_count = self._latest_df.height
@@ -315,6 +344,48 @@ class TreeView(QWidget):
         if self._current_page > self._total_pages:
             self._current_page = self._total_pages
 
+        self._render_current_page()
+
+    def _current_sort_key(self) -> str:
+        sort_key = self._sort_selector.currentData()
+        if isinstance(sort_key, str):
+            return sort_key
+        return SCHEMA.DATETIME
+
+    def _sort_df(self, df: pl.DataFrame) -> pl.DataFrame:
+        if df.is_empty():
+            return df
+
+        primary_sort = self._current_sort_key()
+        sort_columns: list[str] = []
+
+        if primary_sort in df.columns:
+            sort_columns.append(primary_sort)
+        elif SCHEMA.DATETIME in df.columns:
+            sort_columns.append(SCHEMA.DATETIME)
+        elif SCHEMA.FIRST_SEEN in df.columns:
+            sort_columns.append(SCHEMA.FIRST_SEEN)
+
+        if (
+            SCHEMA.TARGET_ID in df.columns
+            and SCHEMA.TARGET_ID not in sort_columns
+        ):
+            sort_columns.append(SCHEMA.TARGET_ID)
+
+        if not sort_columns:
+            return df
+
+        return df.sort(sort_columns, descending=self._is_descending())
+
+    def _is_descending(self) -> bool:
+        is_descending = self._sort_direction_selector.currentData()
+        if isinstance(is_descending, bool):
+            return is_descending
+        return False
+
+    def _on_sort_changed(self, _: int) -> None:
+        self._current_page = 1
+        self._latest_df = self._sort_df(self._latest_df)
         self._render_current_page()
 
     def _render_current_page(self) -> None:
