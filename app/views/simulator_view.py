@@ -1,6 +1,8 @@
+from datetime import UTC, datetime
 import random
 from typing import Any
 
+from app.constants.data_schema import SCHEMA
 from PySide6.QtCore import QSettings, Qt, Signal
 from PySide6.QtGui import QCloseEvent, QHideEvent, QShowEvent
 from PySide6.QtWidgets import (
@@ -127,10 +129,56 @@ class TargetSection(QWidget):
 		self._longitude_input.setValue(longitude)
 
 
+class RdfStationSection(QWidget):
+	rdf_send_requested = Signal(dict)
+
+	def __init__(self, station_id: int, default_bearing_deg: float) -> None:
+		super().__init__()
+		self._station_id = station_id
+
+		self._frequency_input = QDoubleSpinBox()
+		self._frequency_input.setRange(1.0, 6_000_000_000.0)
+		self._frequency_input.setDecimals(0)
+		self._frequency_input.setSingleStep(100.0)
+		self._frequency_input.setValue(2_400_000_000.0)
+
+		self._bearing_input = QDoubleSpinBox()
+		self._bearing_input.setRange(0.0, 359.999)
+		self._bearing_input.setDecimals(0)
+		self._bearing_input.setSingleStep(1.0)
+		self._bearing_input.setValue(default_bearing_deg)
+
+		self._send_button = QPushButton(f'Send Station {station_id}')
+		self._send_button.clicked.connect(self._on_send_clicked)
+
+		layout = QVBoxLayout(self)
+		layout.addWidget(QLabel(f'RDF Station {station_id}', self))
+		layout.addLayout(self._labeled_row('Frequency (Hz)', self._frequency_input))
+		layout.addLayout(self._labeled_row('Bearing (deg)', self._bearing_input))
+		layout.addWidget(self._send_button)
+
+	def _labeled_row(self, label: str, widget: QWidget) -> QHBoxLayout:
+		row = QHBoxLayout()
+		row.addWidget(QLabel(label, self))
+		row.addWidget(widget)
+		return row
+
+	def _on_send_clicked(self) -> None:
+		self.rdf_send_requested.emit(
+			{
+				SCHEMA.STATION_ID: self._station_id,
+				SCHEMA.FREQUENCY: self._frequency_input.value(),
+				SCHEMA.BEARING: self._bearing_input.value(),
+				SCHEMA.DATETIME: datetime.now(UTC).isoformat(),
+			}
+		)
+
+
 class SimulatorView(QWidget):
 	start_simulation_requested = Signal(dict)
 	stop_simulation_requested = Signal(int)
 	stop_all_simulation_requested = Signal()
+	rdf_send_requested = Signal(dict)
 	visibility_changed = Signal(bool)
 
 	def __init__(self, settings: QSettings, parent: QWidget | None = None) -> None:
@@ -168,6 +216,14 @@ class SimulatorView(QWidget):
 			section.start_requested.connect(self._on_start_requested)
 			section.stop_requested.connect(self.stop_simulation_requested.emit)
 			layout.addWidget(section)
+
+		self._rdf_station_sections = [
+			RdfStationSection(station_id=1, default_bearing_deg=45.0),
+			RdfStationSection(station_id=2, default_bearing_deg=315.0),
+		]
+		for rdf_section in self._rdf_station_sections:
+			rdf_section.rdf_send_requested.connect(self.rdf_send_requested.emit)
+			layout.addWidget(rdf_section)
 
 		layout.addStretch()
 		self._load_recent_coordinates()

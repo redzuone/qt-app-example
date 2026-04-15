@@ -10,6 +10,7 @@ from app.controllers.app_controller import AppController
 from app.models.app_model import AppModel
 from app.services.data_store import DataStore
 from app.services.map_service import MapService
+from app.services.rdf_service import RdfService
 from app.services.simulator_service import SimulatorService
 from app.utils.app_settings import create_app_settings
 from app.utils.logging_config import configure_logging
@@ -37,6 +38,9 @@ def main() -> None:
     simulator_service = SimulatorService()
     app.aboutToQuit.connect(simulator_service.stop_all)
 
+    rdf_service = RdfService()
+    app.aboutToQuit.connect(rdf_service.stop)
+
     model = AppModel()
     view = MainWindow(map_url=map_service.map_url, settings=settings)
     data_store = DataStore()
@@ -48,6 +52,7 @@ def main() -> None:
         settings=settings,
         map_service=map_service,
         simulator_service=simulator_service,
+        rdf_service=rdf_service,
     )
     view.show()
     sys.exit(app.exec())

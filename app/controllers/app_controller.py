@@ -7,6 +7,7 @@ from app.constants.data_schema import SCHEMA
 from app.models.app_model import AppModel
 from app.services.data_store import DataStore
 from app.services.map_service import MapService
+from app.services.rdf_service import RdfService
 from app.services.simulator_service import SimulatorService
 from app.utils.app_settings import AppSettings, load_settings, save_settings
 from app.views.main_window import MainWindow
@@ -24,6 +25,7 @@ class AppController:
         settings: QSettings,
         map_service: MapService | None = None,
         simulator_service: SimulatorService | None = None,
+        rdf_service: RdfService | None = None,
     ):
         self._data_store = data_store
         self._model = model
@@ -32,6 +34,7 @@ class AppController:
         self._app_settings: AppSettings = load_settings(settings)
         self._map_service = map_service
         self._simulator_service = simulator_service
+        self._rdf_service: RdfService | None = rdf_service
         self._show_full_trails = False
         self._locked_trail_target_ids: set[str] = set()
 
@@ -40,6 +43,7 @@ class AppController:
             self._connect_simulator()
         if self._data_store is not None:
             self._connect_data_store()
+        self._connect_rdf()
         self._connect_table_view()
         self._connect_tree_view()
         self._connect_map()
@@ -68,6 +72,20 @@ class AppController:
             lambda target_id: simulator_view.set_target_running(target_id, False)
         )
         simulator_service.new_raw_data.connect(self._handle_raw_data)
+
+    def _connect_rdf(self) -> None:
+        rdf_service = self._rdf_service
+        if rdf_service is None:
+            return
+
+        simulator_view = self._view.simulator_view
+        simulator_view.rdf_send_requested.connect(rdf_service.submit_report)
+        rdf_service.rdf_report_received.connect(self._handle_rdf_report)
+        rdf_service.triangulated_fix_ready.connect(self._handle_raw_data)
+        rdf_service.set_sensor_center(
+            self._app_settings.sensor_latitude,
+            self._app_settings.sensor_longitude,
+        )
 
     def _connect_data_store(self) -> None:
         data_store = self._data_store
@@ -127,6 +145,9 @@ class AppController:
 
     def _handle_raw_data(self, payload: dict[str, Any]) -> None:
         self._data_store.add_data(payload)
+
+    def _handle_rdf_report(self, payload: dict[str, Any]) -> None:
+        self._data_store.add_rdf_report(payload)
 
     def _handle_data_updated(self) -> None:
         '''Handle updates from data store'''
@@ -202,6 +223,9 @@ class AppController:
                 command='set_map_brightness',
                 data={'brightness': map_brightness},
             )
+
+        if self._rdf_service is not None:
+            self._rdf_service.set_sensor_center(latitude, longitude)
 
     def _handle_map_web_message(self, connection_id: int, message: dict[str, Any]) -> None:
         if self._map_service is None:

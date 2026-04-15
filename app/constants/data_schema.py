@@ -13,6 +13,9 @@ class DataSchema:
     LONGITUDE: Final[str] = 'longitude'
     HEIGHT: Final[str] = 'height'
     SPEED: Final[str] = 'speed'
+    STATION_ID: Final[str] = 'station_id'
+    FREQUENCY: Final[str] = 'freq'
+    BEARING: Final[str] = 'bearing'
 
 
 SCHEMA = DataSchema()
