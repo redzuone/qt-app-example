@@ -82,9 +82,32 @@ class AppController:
         simulator_view.rdf_send_requested.connect(rdf_service.submit_report)
         rdf_service.rdf_report_received.connect(self._handle_rdf_report)
         rdf_service.triangulated_fix_ready.connect(self._handle_raw_data)
-        rdf_service.set_sensor_center(
-            self._app_settings.sensor_latitude,
-            self._app_settings.sensor_longitude,
+        self._apply_rdf_settings_to_service()
+
+    def _apply_rdf_settings_to_service(self) -> None:
+        rdf_service = self._rdf_service
+        if rdf_service is None:
+            return
+
+        rdf_service.configure_station(
+            station_id=1,
+            latitude=self._app_settings.rdf_station_1_latitude,
+            longitude=self._app_settings.rdf_station_1_longitude,
+            altitude_m=self._app_settings.rdf_station_1_altitude_m,
+            bearing_offset_deg=self._app_settings.rdf_station_1_bearing_offset_deg,
+        )
+        rdf_service.configure_station(
+            station_id=2,
+            latitude=self._app_settings.rdf_station_2_latitude,
+            longitude=self._app_settings.rdf_station_2_longitude,
+            altitude_m=self._app_settings.rdf_station_2_altitude_m,
+            bearing_offset_deg=self._app_settings.rdf_station_2_bearing_offset_deg,
+        )
+        rdf_service.set_frequency_tolerance(
+            self._app_settings.rdf_frequency_tolerance_hz
+        )
+        rdf_service.set_distance_tolerance(
+            self._app_settings.rdf_distance_tolerance_m
         )
 
     def _connect_data_store(self) -> None:
@@ -208,9 +231,23 @@ class AppController:
 
         latitude, longitude = dialog.sensor_center()
         map_brightness = dialog.map_brightness()
+        station_1_lat, station_1_lon, station_1_alt, station_1_offset = dialog.rdf_station_1()
+        station_2_lat, station_2_lon, station_2_alt, station_2_offset = dialog.rdf_station_2()
+        rdf_frequency_tolerance_hz = dialog.rdf_frequency_tolerance_hz()
+        rdf_distance_tolerance_m = dialog.rdf_distance_tolerance_m()
         self._app_settings.sensor_latitude = latitude
         self._app_settings.sensor_longitude = longitude
         self._app_settings.map_brightness = map_brightness
+        self._app_settings.rdf_station_1_latitude = station_1_lat
+        self._app_settings.rdf_station_1_longitude = station_1_lon
+        self._app_settings.rdf_station_1_altitude_m = station_1_alt
+        self._app_settings.rdf_station_1_bearing_offset_deg = station_1_offset
+        self._app_settings.rdf_station_2_latitude = station_2_lat
+        self._app_settings.rdf_station_2_longitude = station_2_lon
+        self._app_settings.rdf_station_2_altitude_m = station_2_alt
+        self._app_settings.rdf_station_2_bearing_offset_deg = station_2_offset
+        self._app_settings.rdf_frequency_tolerance_hz = rdf_frequency_tolerance_hz
+        self._app_settings.rdf_distance_tolerance_m = rdf_distance_tolerance_m
         save_settings(self._qs, self._app_settings)
 
         if self._map_service is not None:
@@ -224,8 +261,7 @@ class AppController:
                 data={'brightness': map_brightness},
             )
 
-        if self._rdf_service is not None:
-            self._rdf_service.set_sensor_center(latitude, longitude)
+        self._apply_rdf_settings_to_service()
 
     def _handle_map_web_message(self, connection_id: int, message: dict[str, Any]) -> None:
         if self._map_service is None:

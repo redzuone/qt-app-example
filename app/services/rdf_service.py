@@ -25,6 +25,14 @@ class _TrackPoint:
     updated_at: datetime
 
 
+@dataclass
+class _StationConfig:
+    latitude: float
+    longitude: float
+    altitude_m: float
+    bearing_offset_deg: float
+
+
 class _RdfTrackIndex:
     """Simple in-memory proximity matcher for stable RDF fix IDs."""
 
@@ -32,6 +40,9 @@ class _RdfTrackIndex:
         self._points: list[_TrackPoint] = []
         self._next_id = 1
         self._max_age = timedelta(seconds=max(max_age_seconds, 1))
+        self._match_radius_m = max(match_radius_m, 10.0)
+
+    def set_match_radius(self, match_radius_m: float) -> None:
         self._match_radius_m = max(match_radius_m, 10.0)
 
     def assign_track_id(
@@ -85,18 +96,40 @@ class RdfTriangulationWorker(QObject):
     def __init__(self) -> None:
         super().__init__()
         self._track_index = _RdfTrackIndex()
-        self._station_positions: dict[int, tuple[float, float]] = {
-            1: (0.0, -0.01),
-            2: (0.0, 0.01),
+        self._station_configs: dict[int, _StationConfig] = {
+            1: _StationConfig(0.0, -0.01, 0.0, 0.0),
+            2: _StationConfig(0.0, 0.01, 0.0, 0.0),
         }
+        self._distance_tolerance_m = 1_500.0
 
     @Slot(float, float)
     def set_sensor_center(self, latitude: float, longitude: float) -> None:
         # Keep two stations offset from sensor center to produce intersections by default.
-        self._station_positions = {
-            1: (latitude, longitude - 0.01),
-            2: (latitude, longitude + 0.01),
-        }
+        self.configure_station(1, latitude, longitude - 0.01, 0.0, 0.0)
+        self.configure_station(2, latitude, longitude + 0.01, 0.0, 0.0)
+
+    @Slot(int, float, float, float, float)
+    def configure_station(
+        self,
+        station_id: int,
+        latitude: float,
+        longitude: float,
+        altitude_m: float,
+        bearing_offset_deg: float,
+    ) -> None:
+        if station_id not in (1, 2):
+            return
+        self._station_configs[station_id] = _StationConfig(
+            latitude=latitude,
+            longitude=longitude,
+            altitude_m=altitude_m,
+            bearing_offset_deg=bearing_offset_deg,
+        )
+
+    @Slot(float)
+    def set_distance_tolerance(self, distance_tolerance_m: float) -> None:
+        self._distance_tolerance_m = max(distance_tolerance_m, 0.0)
+        self._track_index.set_match_radius(self._distance_tolerance_m)
 
     @Slot(dict, dict)
     def triangulate(self, report_a: dict[str, float | int | str], report_b: dict[str, float | int | str]) -> None:
@@ -113,6 +146,10 @@ class RdfTriangulationWorker(QObject):
             longitude=fix_lon,
             now=timestamp,
         )
+
+        if crossing_error_m > self._distance_tolerance_m:
+            return
+
 
         payload = {
             SCHEMA.TYPE: 'rdf_fix',
@@ -134,22 +171,24 @@ class RdfTriangulationWorker(QObject):
         if station_a == station_b:
             return None
 
-        position_a = self._station_positions.get(station_a)
-        position_b = self._station_positions.get(station_b)
-        if position_a is None or position_b is None:
+        config_a = self._station_configs.get(station_a)
+        config_b = self._station_configs.get(station_b)
+        if config_a is None or config_b is None:
             return None
 
-        lat_ref = (position_a[0] + position_b[0]) / 2.0
+        lat_ref = (config_a.latitude + config_b.latitude) / 2.0
         meters_per_deg_lat = 111_320.0
         meters_per_deg_lon = max(111_320.0 * abs(math.cos(math.radians(lat_ref))), 1.0)
 
-        p1x = (position_a[1] - position_a[1]) * meters_per_deg_lon
-        p1y = (position_a[0] - position_a[0]) * meters_per_deg_lat
-        p2x = (position_b[1] - position_a[1]) * meters_per_deg_lon
-        p2y = (position_b[0] - position_a[0]) * meters_per_deg_lat
+        p1x = 0.0
+        p1y = 0.0
+        p2x = (config_b.longitude - config_a.longitude) * meters_per_deg_lon
+        p2y = (config_b.latitude - config_a.latitude) * meters_per_deg_lat
 
-        b1 = math.radians(float(report_a[SCHEMA.BEARING]) % 360.0)
-        b2 = math.radians(float(report_b[SCHEMA.BEARING]) % 360.0)
+        b1_deg = (float(report_a[SCHEMA.BEARING]) + config_a.bearing_offset_deg) % 360.0
+        b2_deg = (float(report_b[SCHEMA.BEARING]) + config_b.bearing_offset_deg) % 360.0
+        b1 = math.radians(b1_deg)
+        b2 = math.radians(b2_deg)
         d1x, d1y = math.sin(b1), math.cos(b1)
         d2x, d2y = math.sin(b2), math.cos(b2)
 
@@ -174,8 +213,8 @@ class RdfTriangulationWorker(QObject):
         fix_y = (i1y + i2y) / 2.0
         crossing_error_m = math.hypot(i1x - i2x, i1y - i2y)
 
-        fix_lat = position_a[0] + (fix_y / meters_per_deg_lat)
-        fix_lon = position_a[1] + (fix_x / meters_per_deg_lon)
+        fix_lat = config_a.latitude + (fix_y / meters_per_deg_lat)
+        fix_lon = config_a.longitude + (fix_x / meters_per_deg_lon)
         return (fix_lat, fix_lon, crossing_error_m)
 
 
@@ -184,10 +223,13 @@ class RdfService(QObject):
     triangulated_fix_ready = Signal(dict)
     _triangulate_requested = Signal(dict, dict)
     _set_sensor_center_requested = Signal(float, float)
+    _configure_station_requested = Signal(int, float, float, float, float)
+    _set_distance_tolerance_requested = Signal(float)
 
     def __init__(self, *, time_window_seconds: int = 60) -> None:
         super().__init__()
         self._window_seconds = max(time_window_seconds, 1)
+        self._frequency_tolerance_hz = 0.0
         self._reports_by_station: dict[int, deque[RdfReport]] = {
             1: deque(),
             2: deque(),
@@ -199,11 +241,38 @@ class RdfService(QObject):
         self._worker.triangulation_ready.connect(self.triangulated_fix_ready.emit)
         self._triangulate_requested.connect(self._worker.triangulate)
         self._set_sensor_center_requested.connect(self._worker.set_sensor_center)
+        self._configure_station_requested.connect(self._worker.configure_station)
+        self._set_distance_tolerance_requested.connect(self._worker.set_distance_tolerance)
         self._thread.start()
 
     @Slot(float, float)
     def set_sensor_center(self, latitude: float, longitude: float) -> None:
         self._set_sensor_center_requested.emit(latitude, longitude)
+
+    @Slot(int, float, float, float, float)
+    def configure_station(
+        self,
+        station_id: int,
+        latitude: float,
+        longitude: float,
+        altitude_m: float,
+        bearing_offset_deg: float,
+    ) -> None:
+        self._configure_station_requested.emit(
+            station_id,
+            latitude,
+            longitude,
+            altitude_m,
+            bearing_offset_deg,
+        )
+
+    @Slot(float)
+    def set_frequency_tolerance(self, frequency_tolerance_hz: float) -> None:
+        self._frequency_tolerance_hz = max(frequency_tolerance_hz, 0.0)
+
+    @Slot(float)
+    def set_distance_tolerance(self, distance_tolerance_m: float) -> None:
+        self._set_distance_tolerance_requested.emit(max(distance_tolerance_m, 0.0))
 
     @Slot(dict)
     def submit_report(self, payload: dict[str, float | int | str]) -> None:
@@ -296,7 +365,7 @@ class RdfService(QObject):
         best_match: RdfReport | None = None
         best_delta_seconds = float('inf')
         for candidate in station_queue:
-            if abs(candidate.frequency_hz - report.frequency_hz) > 1e-6:
+            if abs(candidate.frequency_hz - report.frequency_hz) > self._frequency_tolerance_hz:
                 continue
             delta_seconds = abs((report.timestamp - candidate.timestamp).total_seconds())
             if delta_seconds <= self._window_seconds and delta_seconds < best_delta_seconds:
