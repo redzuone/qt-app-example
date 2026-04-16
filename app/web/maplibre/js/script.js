@@ -19,6 +19,11 @@ const TARGETS_LABEL_LAYER_ID = 'targets-label-layer';
 const VEHICLE_ICON_ID = 'vehicle-icon';
 const TARGET_ICON_ID = 'target-icon';
 const RAW_ICON_ID = 'raw-icon';
+const POPUP_TARGET_LAYER_IDS = [
+    TARGETS_RAW_LAYER_ID,
+    TARGETS_VEHICLE_LAYER_ID,
+    TARGETS_ICON_LAYER_ID,
+];
 const SDF_IMAGE_OPTIONS = {
     sdf: true,
 };
@@ -104,6 +109,17 @@ let rawIconReady = false;
 let vehicleIconReady = false;
 let targetIconReady = false;
 let targetLabelsVisible = false;
+let activePopupTargetId = null;
+const targetPopup = new maplibregl.Popup({
+    closeButton: true,
+    closeOnClick: false,
+    maxWidth: '320px',
+    className: 'target-popup-fixed',
+});
+
+targetPopup.on('close', function () {
+    activePopupTargetId = null;
+});
 
 const map = new maplibregl.Map({
     container: 'map',
@@ -178,6 +194,7 @@ function normalizeTargetsGeoJson(geojson) {
 function setTargetsData(geojson) {
     const normalized = normalizeTargetsGeoJson(geojson);
     pendingTargetsGeoJson = normalized;
+    refreshActiveTargetPopup(normalized);
 
     if (!targetsLayerReady) {
         return;
@@ -240,6 +257,144 @@ function setTrailsData(geojson) {
     const source = map.getSource(TRAILS_SOURCE_ID);
     if (source) {
         source.setData(normalized);
+    }
+}
+
+function escapePopupHtml(value) {
+    return String(value)
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;');
+}
+
+function toDisplayLabel(value) {
+    return String(value)
+        .replaceAll('_', ' ')
+        .replace(/\b\w/g, function (match) {
+            return match.toUpperCase();
+        });
+}
+
+function formatPopupCoordinate(value) {
+    const numericValue = Number(value);
+    if (!Number.isFinite(numericValue)) {
+        return null;
+    }
+
+    return numericValue.toFixed(6);
+}
+
+function formatPopupDatetime(value) {
+    if (value === null || value === undefined || value === '') {
+        return null;
+    }
+
+    return String(value).replace(/\.\d+(Z|[+-]\d{2}:\d{2})$/, '$1');
+}
+
+function buildPopupRows(feature) {
+    const properties = feature?.properties || {};
+    const coordinates = feature?.geometry?.coordinates;
+    const longitude = Array.isArray(coordinates) ? formatPopupCoordinate(coordinates[0]) : null;
+    const latitude = Array.isArray(coordinates) ? formatPopupCoordinate(coordinates[1]) : null;
+    const rows = [];
+
+    [
+        ['Target ID', properties.target_id],
+        ['Name', properties.target_name],
+        ['Type', properties.type ? toDisplayLabel(properties.type) : null],
+        ['Time', formatPopupDatetime(properties.datetime)],
+        ['Height', properties.height],
+        ['Speed', properties.speed],
+        ['Latitude', latitude],
+        ['Longitude', longitude],
+    ].forEach(function ([label, value]) {
+        if (value === null || value === undefined || value === '') {
+            return;
+        }
+
+        rows.push(
+            `<div><strong>${escapePopupHtml(label)}:</strong> ${escapePopupHtml(value)}</div>`
+        );
+    });
+
+    return rows;
+}
+
+function buildTargetPopupHtml(feature) {
+    const properties = feature?.properties || {};
+    const title = properties.target_name || properties.target_id || toDisplayLabel(properties.type || 'marker');
+    const rows = buildPopupRows(feature);
+
+    return [
+        '<div class="target-popup">',
+        `  <div><strong>${escapePopupHtml(title)}</strong></div>`,
+        rows.length > 0 ? `  <div>${rows.join('')}</div>` : '  <div>No details available.</div>',
+        '</div>',
+    ].join('');
+}
+
+function getFeatureTargetId(feature) {
+    const targetId = feature?.properties?.target_id;
+    if (targetId === null || targetId === undefined || targetId === '') {
+        return null;
+    }
+
+    return String(targetId);
+}
+
+function getPopupTargetFeature(point) {
+    const availableLayerIds = POPUP_TARGET_LAYER_IDS.filter(function (layerId) {
+        return Boolean(map.getLayer(layerId));
+    });
+
+    if (availableLayerIds.length === 0) {
+        return null;
+    }
+
+    const features = map.queryRenderedFeatures(point, {
+        layers: availableLayerIds,
+    });
+
+    return features[0] || null;
+}
+
+function showTargetPopup(feature) {
+    const coordinates = feature?.geometry?.coordinates;
+    if (!Array.isArray(coordinates) || coordinates.length < 2) {
+        return;
+    }
+
+    targetPopup
+        .setLngLat([Number(coordinates[0]), Number(coordinates[1])])
+        .setHTML(buildTargetPopupHtml(feature))
+        .addTo(map);
+
+    activePopupTargetId = getFeatureTargetId(feature);
+}
+
+function refreshActiveTargetPopup(geojson) {
+    if (!targetPopup.isOpen() || !activePopupTargetId) {
+        return;
+    }
+
+    const features = Array.isArray(geojson?.features) ? geojson.features : [];
+    const updatedFeature = features.find(function (feature) {
+        return getFeatureTargetId(feature) === activePopupTargetId;
+    });
+
+    if (!updatedFeature) {
+        targetPopup.remove();
+        return;
+    }
+
+    const coordinates = updatedFeature?.geometry?.coordinates;
+    if (Array.isArray(coordinates) && coordinates.length >= 2) {
+        targetPopup
+            .setLngLat([Number(coordinates[0]), Number(coordinates[1])])
+            .setHTML(buildTargetPopupHtml(updatedFeature));
     }
 }
 
@@ -629,6 +784,11 @@ map.on('zoomend', function () {
 });
 
 map.on('click', function (event) {
+    const targetFeature = getPopupTargetFeature(event.point);
+    if (targetFeature) {
+        showTargetPopup(targetFeature);
+    }
+
     ruler.handleMapClick(event);
 });
 
