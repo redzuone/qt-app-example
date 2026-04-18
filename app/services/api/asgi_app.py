@@ -52,6 +52,23 @@ async def broadcast_json(payload: Mapping[str, Any]) -> int:
     return delivered_count
 
 
+async def send_json_to_connection(connection_id: int, payload: Mapping[str, Any]) -> int:
+    message_text = json.dumps(dict(payload))
+
+    with _websocket_connections_lock:
+        connection_send = _websocket_connections.get(connection_id)
+
+    if connection_send is None:
+        return 0
+
+    try:
+        await connection_send({'type': 'websocket.send', 'text': message_text})
+        return 1
+    except Exception:
+        logger.warning('Failed to send websocket message to connection %s.', connection_id)
+        return 0
+
+
 async def static_web_app(scope: Scope, receive: Receive, send: Send) -> None:
     if scope['type'] == 'websocket' and scope.get('path') == '/ws':
         await _websocket_hello_app(receive, send)
@@ -115,6 +132,7 @@ async def _websocket_hello_app(receive: Receive, send: Send) -> None:
 
     connection_id = next(_next_connection_id)
     await _register_connection(connection_id, send)
+    _dispatch_incoming_message(connection_id, {'type': 'websocket_connected'})
 
     connection_state = {'last_reply_at': time(), 'timeout_logged': False}
     hello_task = asyncio.create_task(_send_hello_interval(send))

@@ -33,6 +33,18 @@ class MapService:
     def send_json(self, payload: dict[str, Any], timeout_seconds: float = 1.0) -> int:
         return self._server.send_json(payload=payload, timeout_seconds=timeout_seconds)
 
+    def send_json_to_connection(
+        self,
+        connection_id: int,
+        payload: dict[str, Any],
+        timeout_seconds: float = 1.0,
+    ) -> int:
+        return self._server.send_json_to_connection(
+            connection_id=connection_id,
+            payload=payload,
+            timeout_seconds=timeout_seconds,
+        )
+
     def send_cmd(
         self,
         command: str,
@@ -45,6 +57,24 @@ class MapService:
             'data': data or {},
         }
         return self.send_json(payload=payload, timeout_seconds=timeout_seconds)
+
+    def send_cmd_to_connection(
+        self,
+        connection_id: int,
+        command: str,
+        data: dict[str, Any] | None = None,
+        timeout_seconds: float = 1.0,
+    ) -> int:
+        payload: dict[str, Any] = {
+            'type': 'cmd',
+            'command': command,
+            'data': data or {},
+        }
+        return self.send_json_to_connection(
+            connection_id=connection_id,
+            payload=payload,
+            timeout_seconds=timeout_seconds,
+        )
 
     def focus_target(self, target_id: str, latitude: float, longitude: float) -> None:
         """Focus/center map on a specific target.
@@ -63,6 +93,48 @@ class MapService:
             'longitude': longitude,
         }
         self.send_cmd(command='focus_target', data=data)
+
+    def set_sensor_center(
+        self,
+        latitude: float,
+        longitude: float,
+        connection_id: int | None = None,
+        fit: bool = False,
+    ) -> None:
+        data = {
+            'latitude': latitude,
+            'longitude': longitude,
+            'fit': fit,
+        }
+
+        if connection_id is None:
+            self.send_cmd(command='set_sensor_center', data=data)
+            return
+
+        self.send_cmd_to_connection(
+            connection_id=connection_id,
+            command='set_sensor_center',
+            data=data,
+        )
+
+    def set_map_brightness(
+        self,
+        brightness: float,
+        connection_id: int | None = None,
+    ) -> None:
+        data = {
+            'brightness': brightness,
+        }
+
+        if connection_id is None:
+            self.send_cmd(command='set_map_brightness', data=data)
+            return
+
+        self.send_cmd_to_connection(
+            connection_id=connection_id,
+            command='set_map_brightness',
+            data=data,
+        )
 
     def set_web_message_handler(
         self, handler: IncomingMapMessageHandler | None
@@ -111,8 +183,8 @@ class MapService:
         
         self.send_cmd(command='update_targets', data=geojson)
 
-    def update_trails(self, df: pl.DataFrame) -> None:
-        """Convert per-point DataFrame to per-target segmented trail GeoJSON."""
+    def update_trails(self, df: pl.DataFrame, fade_segments: bool = True) -> None:
+        """Convert per-point DataFrame to per-target trail GeoJSON."""
         if df.is_empty():
             geojson: dict[str, Any] = {'type': 'FeatureCollection', 'features': []}
             self.send_cmd(command='update_trails', data=geojson)
@@ -141,6 +213,21 @@ class MapService:
         features = []
         for target_id, coordinates in target_points.items():
             if len(coordinates) < 2:
+                continue
+
+            if not fade_segments:
+                features.append(
+                    {
+                        'type': 'Feature',
+                        'geometry': {
+                            'type': 'LineString',
+                            'coordinates': coordinates,
+                        },
+                        'properties': {
+                            **target_props[target_id],
+                        },
+                    }
+                )
                 continue
 
             total_segments = len(coordinates) - 1

@@ -11,6 +11,7 @@ import uvicorn
 from app.services.api.asgi_app import (
     IncomingMessageHandler,
     broadcast_json,
+    send_json_to_connection as asgi_send_json_to_connection,
     set_incoming_message_handler,
     static_web_app,
 )
@@ -67,7 +68,58 @@ class ThreadedUvicornServer:
         if self._loop is None or self._server is None or not self._server.started:
             raise RuntimeError('Local API server is not running.')
 
+        # If called from the server event-loop thread, blocking on
+        # future.result(...) deadlocks that loop and times out.
+        try:
+            running_loop = asyncio.get_running_loop()
+        except RuntimeError:
+            running_loop = None
+
+        if running_loop is self._loop:
+            task = self._loop.create_task(broadcast_json(payload))
+
+            def _consume_task_exception(done_task: asyncio.Task[int]) -> None:
+                try:
+                    done_task.exception()
+                except asyncio.CancelledError:
+                    return
+
+            task.add_done_callback(_consume_task_exception)
+            return 0
+
         coroutine = broadcast_json(payload)
+        future = asyncio.run_coroutine_threadsafe(coroutine, self._loop)
+        return int(future.result(timeout=timeout_seconds))
+
+    def send_json_to_connection(
+        self,
+        connection_id: int,
+        payload: dict[str, Any],
+        timeout_seconds: float = 1.0,
+    ) -> int:
+        if self._loop is None or self._server is None or not self._server.started:
+            raise RuntimeError('Local API server is not running.')
+
+        try:
+            running_loop = asyncio.get_running_loop()
+        except RuntimeError:
+            running_loop = None
+
+        if running_loop is self._loop:
+            task = self._loop.create_task(
+                asgi_send_json_to_connection(connection_id, payload)
+            )
+
+            def _consume_task_exception(done_task: asyncio.Task[int]) -> None:
+                try:
+                    done_task.exception()
+                except asyncio.CancelledError:
+                    return
+
+            task.add_done_callback(_consume_task_exception)
+            return 0
+
+        coroutine = asgi_send_json_to_connection(connection_id, payload)
         future = asyncio.run_coroutine_threadsafe(coroutine, self._loop)
         return int(future.result(timeout=timeout_seconds))
 

@@ -29,6 +29,14 @@ class DataStore(QObject):
                 SCHEMA.SPEED: pl.Float64,
             }
         )
+        self._rdf_df = pl.DataFrame(
+            schema={
+                SCHEMA.DATETIME: pl.Datetime('ms', 'UTC'),
+                SCHEMA.STATION_ID: pl.Int64,
+                SCHEMA.FREQUENCY: pl.Float64,
+                SCHEMA.BEARING: pl.Float64,
+            }
+        )
         self._batch: list[dict[str, Any]] = []
 
         self._batch_timer = QTimer(self)
@@ -84,23 +92,41 @@ class DataStore(QObject):
         return latest_row
 
     def get_latest_per_target(self) -> pl.DataFrame:
-        """Get most recent data for each target"""
+        """Get most recent data for each target with first_seen metadata."""
         self._flush_batch()
-        return self._df.group_by(SCHEMA.TARGET_ID).agg(pl.all().sort_by(SCHEMA.DATETIME).last())
 
-    def get_trail_points_per_target(self, max_points_per_target: int = 200) -> pl.DataFrame:
+        latest_df = self._df.group_by(SCHEMA.TARGET_ID).agg(
+            pl.all().sort_by(SCHEMA.DATETIME).last()
+        )
+        first_seen_df = self._df.group_by(SCHEMA.TARGET_ID).agg(
+            pl.col(SCHEMA.DATETIME).min().alias(SCHEMA.FIRST_SEEN)
+        )
+        latest_df = latest_df.join(first_seen_df, on=SCHEMA.TARGET_ID, how='left')
+        return latest_df
+
+    def get_trail_points_per_target(
+        self,
+        max_points_per_target: int = 200,
+        target_ids: set[str] | None = None,
+    ) -> pl.DataFrame:
         """Get recent ordered trail points per target.
 
         Returns a DataFrame with one row per point, sorted by target and datetime,
-        containing only valid coordinates.
+        containing only valid coordinates. Pass max_points_per_target <= 0 to
+        keep full history.
         """
         self._flush_batch()
 
         if self._df.is_empty():
             return self._df.clear()
 
+        trail_df = self._df
+
+        if target_ids:
+            trail_df = self._df.filter(pl.col(SCHEMA.TARGET_ID).is_in(sorted(target_ids)))
+
         trail_df = (
-            self._df
+            trail_df
             .filter(
                 pl.col(SCHEMA.LATITUDE).is_not_null()
                 & pl.col(SCHEMA.LONGITUDE).is_not_null()
@@ -131,11 +157,43 @@ class DataStore(QObject):
         self._flush_batch()
         return self._df.clone()
 
+    def add_rdf_report(self, report: dict[str, Any]) -> None:
+        """Add one RDF report to the dedicated RDF buffer."""
+        try:
+            timestamp = datetime.fromisoformat(str(report[SCHEMA.DATETIME]))
+            station_id = int(report[SCHEMA.STATION_ID])
+            frequency_hz = float(report[SCHEMA.FREQUENCY])
+            bearing_deg = float(report[SCHEMA.BEARING])
+        except (KeyError, TypeError, ValueError):
+            return
+
+        rdf_row = {
+            SCHEMA.DATETIME: timestamp,
+            SCHEMA.STATION_ID: station_id,
+            SCHEMA.FREQUENCY: frequency_hz,
+            SCHEMA.BEARING: bearing_deg,
+        }
+
+        new_df = pl.DataFrame([rdf_row], schema=self._rdf_df.schema)
+        self._rdf_df = pl.concat([self._rdf_df, new_df], how='vertical_relaxed')
+
+        if len(self._rdf_df) > self._max_rows:
+            self._rdf_df = self._rdf_df.tail(self._max_rows)
+
+        cutoff = datetime.now(UTC) - timedelta(hours=self._auto_cleanup_hours)
+        self._rdf_df = self._rdf_df.filter(pl.col(SCHEMA.DATETIME) > cutoff)
+
+    def get_recent_rdf_reports(self, window_seconds: int = 60) -> pl.DataFrame:
+        """Get RDF reports within the recent time window."""
+        cutoff = datetime.now(UTC) - timedelta(seconds=max(window_seconds, 1))
+        return self._rdf_df.filter(pl.col(SCHEMA.DATETIME) >= cutoff)
+
     def clear(self) -> None:
         """Clear all data"""
         self._batch_timer.stop()
         self._batch.clear()
         self._df = self._df.clear()
+        self._rdf_df = self._rdf_df.clear()
         self.data_updated.emit()
     
     def delete_target(self, target_id: str) -> None:

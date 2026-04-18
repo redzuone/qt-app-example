@@ -1,17 +1,32 @@
+import math
 from typing import Any
 
 import polars as pl
-from PySide6.QtCore import QPoint, Qt, Signal
-from PySide6.QtGui import QAction, QColor
-from PySide6.QtWidgets import QHeaderView, QMenu, QTreeWidget, QTreeWidgetItem
+from PySide6.QtCore import QPoint, Qt, QTimer, Signal
+from PySide6.QtGui import QAction, QColor, QResizeEvent
+from PySide6.QtWidgets import (
+    QComboBox,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QMenu,
+    QPushButton,
+    QTreeWidget,
+    QTreeWidgetItem,
+    QVBoxLayout,
+    QWidget,
+)
 
 from app.constants.data_schema import SCHEMA
 from app.utils.target_color import target_color_hex, target_text_color_hex
 
 
-class TreeView(QTreeWidget):
+class TargetTreeWidget(QTreeWidget):
     delete_target_by_id = Signal(str)
     view_target_on_map = Signal(str)
+    lock_trail_to_target = Signal(str)
+    unlock_trail_from_target = Signal(str)
+    clear_all_trail_locks_requested = Signal()
 
     COLUMN_LABELS = {
         SCHEMA.TARGET_NAME: 'Name',
@@ -58,15 +73,16 @@ class TreeView(QTreeWidget):
             self.clear()
             self._item_by_id.clear()
             return
-        df = df.sort(SCHEMA.DATETIME, descending=False)
         target_id_col = self._get_column_index(SCHEMA.TARGET_ID)
 
         # Store current selection before modifying tree
         selected_target_id, selected_child_index = self._store_selection()
 
-        # Update or create parent items
-        for row in df.iter_rows(named=True):
+        # Update or create parent items in exact row order
+        ordered_target_ids: list[str] = []
+        for row_index, row in enumerate(df.iter_rows(named=True)):
             target_id = row[SCHEMA.TARGET_ID]
+            ordered_target_ids.append(target_id)
             target_name = row[SCHEMA.TARGET_NAME] or ''
             datetime_val = row[SCHEMA.DATETIME] or ''
 
@@ -74,8 +90,14 @@ class TreeView(QTreeWidget):
             parent_item = self._item_by_id.get(target_id)
             if parent_item is None:
                 parent_item = QTreeWidgetItem()
-                self.addTopLevelItem(parent_item)
+                self.insertTopLevelItem(row_index, parent_item)
                 self._item_by_id[target_id] = parent_item
+            else:
+                current_index = self.indexOfTopLevelItem(parent_item)
+                if current_index != row_index and current_index >= 0:
+                    moved_item = self.takeTopLevelItem(current_index)
+                    if moved_item is not None:
+                        self.insertTopLevelItem(row_index, moved_item)
 
             # Update parent item data
             parent_item.setText(0, target_name)
@@ -94,7 +116,7 @@ class TreeView(QTreeWidget):
             parent_item.setExpanded(expanded)
 
         # Remove stale items (targets no longer in data)
-        current_target_ids = set(df[SCHEMA.TARGET_ID])
+        current_target_ids = set(ordered_target_ids)
         stale_ids = set(self._item_by_id.keys()) - current_target_ids
         for target_id in stale_ids:
             item = self._item_by_id.pop(target_id)
@@ -134,6 +156,7 @@ class TreeView(QTreeWidget):
     ) -> None:
         """Rebuild child items for a parent from row data"""
         fields = [
+            (SCHEMA.FIRST_SEEN, 'First Seen'),
             (SCHEMA.TYPE, 'Type'),
             (SCHEMA.LATITUDE, 'Latitude'),
             (SCHEMA.LONGITUDE, 'Longitude'),
@@ -194,6 +217,24 @@ class TreeView(QTreeWidget):
         )
         menu.addAction(view_map_action)
 
+        lock_trail_action = QAction('Lock Trail to This Target', self)
+        lock_trail_action.triggered.connect(
+            lambda: self.lock_trail_to_target.emit(target_id)
+        )
+        menu.addAction(lock_trail_action)
+
+        unlock_trail_action = QAction('Unlock Trail from This Target', self)
+        unlock_trail_action.triggered.connect(
+            lambda: self.unlock_trail_from_target.emit(target_id)
+        )
+        menu.addAction(unlock_trail_action)
+
+        clear_trail_lock_action = QAction('Clear All Trail Locks', self)
+        clear_trail_lock_action.triggered.connect(
+            self.clear_all_trail_locks_requested.emit
+        )
+        menu.addAction(clear_trail_lock_action)
+
         delete_action = QAction('Delete Target', self)
         delete_action.triggered.connect(
             lambda: self.delete_target_by_id.emit(target_id)
@@ -202,18 +243,207 @@ class TreeView(QTreeWidget):
 
         menu.exec(self.viewport().mapToGlobal(position))
 
-    def _on_view_on_map(self, item: QTreeWidgetItem) -> None:
-        """Handle view on map action"""
-        col_index = self._get_column_index(SCHEMA.TARGET_ID)
-        if col_index is None:
-            return
-        target_id = item.text(col_index)
-        self.view_target_on_map.emit(target_id)
 
-    def _on_delete_target(self, item: QTreeWidgetItem) -> None:
-        """Handle delete target action"""
-        col_index = self._get_column_index(SCHEMA.TARGET_ID)
-        if col_index is None:
+class TreeView(QWidget):
+    delete_target_by_id = Signal(str)
+    view_target_on_map = Signal(str)
+    lock_trail_to_target = Signal(str)
+    unlock_trail_from_target = Signal(str)
+    clear_all_trail_locks_requested = Signal()
+    RESIZE_DEBOUNCE_MS = 120
+    SORT_OPTIONS: list[tuple[str, str]] = [
+        ('Date/Time', SCHEMA.DATETIME),
+        ('First Seen', SCHEMA.FIRST_SEEN),
+        ('Type', SCHEMA.TYPE),
+        ('Target ID', SCHEMA.TARGET_ID),
+        ('Height', SCHEMA.HEIGHT),
+        ('Speed', SCHEMA.SPEED),
+    ]
+    SORT_DIRECTION_OPTIONS: list[tuple[str, bool]] = [
+        ('Ascending', False),
+        ('Descending', True),
+    ]
+
+    def __init__(self) -> None:
+        super().__init__()
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(6)
+
+        self._tree = TargetTreeWidget()
+        self._tree.view_target_on_map.connect(self.view_target_on_map.emit)
+        self._tree.delete_target_by_id.connect(self.delete_target_by_id.emit)
+        self._tree.lock_trail_to_target.connect(self.lock_trail_to_target.emit)
+        self._tree.unlock_trail_from_target.connect(
+            self.unlock_trail_from_target.emit
+        )
+        self._tree.clear_all_trail_locks_requested.connect(
+            self.clear_all_trail_locks_requested.emit
+        )
+
+        sort_layout = QHBoxLayout()
+        sort_layout.setContentsMargins(4, 0, 4, 0)
+        sort_layout.setSpacing(8)
+
+        self._sort_label = QLabel('Sort by')
+        self._sort_selector = QComboBox()
+        for label, schema_key in self.SORT_OPTIONS:
+            self._sort_selector.addItem(label, schema_key)
+        self._sort_selector.currentIndexChanged.connect(self._on_sort_changed)
+
+        self._sort_direction_label = QLabel('Order')
+        self._sort_direction_selector = QComboBox()
+        for label, is_descending in self.SORT_DIRECTION_OPTIONS:
+            self._sort_direction_selector.addItem(label, is_descending)
+        self._sort_direction_selector.currentIndexChanged.connect(
+            self._on_sort_changed
+        )
+
+        sort_layout.addWidget(self._sort_label)
+        sort_layout.addWidget(self._sort_selector)
+        sort_layout.addWidget(self._sort_direction_label)
+        sort_layout.addWidget(self._sort_direction_selector)
+        sort_layout.addStretch(1)
+
+        pager_layout = QHBoxLayout()
+        pager_layout.setContentsMargins(4, 0, 4, 0)
+        pager_layout.setSpacing(8)
+
+        self._prev_button = QPushButton('Previous')
+        self._next_button = QPushButton('Next')
+        self._page_label = QLabel('Page 1 / 1')
+        self._page_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        self._prev_button.clicked.connect(self._go_to_previous_page)
+        self._next_button.clicked.connect(self._go_to_next_page)
+
+        pager_layout.addWidget(self._prev_button)
+        pager_layout.addWidget(self._page_label, 1)
+        pager_layout.addWidget(self._next_button)
+
+        layout.addLayout(sort_layout)
+        layout.addWidget(self._tree)
+        layout.addLayout(pager_layout)
+
+        self._latest_df = pl.DataFrame()
+        self._current_page = 1
+        self._total_pages = 1
+        self._page_size = 1
+        self._resize_timer = QTimer(self)
+        self._resize_timer.setSingleShot(True)
+        self._resize_timer.timeout.connect(self._apply_resized_page_size)
+        self._update_pagination_ui()
+
+    def update_tree(self, df: pl.DataFrame) -> None:
+        """Update paged tree data and keep current page when possible."""
+        self._latest_df = self._sort_df(df)
+        self._page_size = max(1, self._calculate_page_size())
+
+        row_count = self._latest_df.height
+        self._total_pages = max(1, math.ceil(row_count / self._page_size))
+        if self._current_page > self._total_pages:
+            self._current_page = self._total_pages
+
+        self._render_current_page()
+
+    def _current_sort_key(self) -> str:
+        sort_key = self._sort_selector.currentData()
+        if isinstance(sort_key, str):
+            return sort_key
+        return SCHEMA.DATETIME
+
+    def _sort_df(self, df: pl.DataFrame) -> pl.DataFrame:
+        if df.is_empty():
+            return df
+
+        primary_sort = self._current_sort_key()
+        sort_columns: list[str] = []
+
+        if primary_sort in df.columns:
+            sort_columns.append(primary_sort)
+        elif SCHEMA.DATETIME in df.columns:
+            sort_columns.append(SCHEMA.DATETIME)
+        elif SCHEMA.FIRST_SEEN in df.columns:
+            sort_columns.append(SCHEMA.FIRST_SEEN)
+
+        if (
+            SCHEMA.TARGET_ID in df.columns
+            and SCHEMA.TARGET_ID not in sort_columns
+        ):
+            sort_columns.append(SCHEMA.TARGET_ID)
+
+        if not sort_columns:
+            return df
+
+        return df.sort(sort_columns, descending=self._is_descending())
+
+    def _is_descending(self) -> bool:
+        is_descending = self._sort_direction_selector.currentData()
+        if isinstance(is_descending, bool):
+            return is_descending
+        return False
+
+    def _on_sort_changed(self, _: int) -> None:
+        self._current_page = 1
+        self._latest_df = self._sort_df(self._latest_df)
+        self._render_current_page()
+
+    def _render_current_page(self) -> None:
+        if self._latest_df.is_empty():
+            self._tree.update_tree(self._latest_df)
+            self._update_pagination_ui()
             return
-        target_id = item.text(col_index)
-        self.delete_target_by_id.emit(target_id)
+
+        start_idx = (self._current_page - 1) * self._page_size
+        page_df = self._latest_df.slice(start_idx, self._page_size)
+        self._tree.update_tree(page_df)
+        self._update_pagination_ui()
+
+    def _calculate_page_size(self) -> int:
+        """Estimate how many top-level rows fit in the current tree viewport."""
+        viewport_height = max(0, self._tree.viewport().height())
+        row_height = self._tree.sizeHintForRow(0)
+        if row_height <= 0:
+            # Hard minimum; extra padding on top of font
+            row_height = max(18, self._tree.fontMetrics().height() + 6)
+
+        return max(1, viewport_height // row_height)
+
+    def resizeEvent(self, event: QResizeEvent) -> None:
+        super().resizeEvent(event)
+        self._resize_timer.start(self.RESIZE_DEBOUNCE_MS)
+
+    def _apply_resized_page_size(self) -> None:
+        new_page_size = max(1, self._calculate_page_size())
+        if new_page_size == self._page_size:
+            return
+
+        first_visible_index = (self._current_page - 1) * self._page_size
+        self._page_size = new_page_size
+
+        row_count = self._latest_df.height
+        self._total_pages = max(1, math.ceil(row_count / max(1, self._page_size)))
+        self._current_page = max(1, (first_visible_index // self._page_size) + 1)
+        if self._current_page > self._total_pages:
+            self._current_page = self._total_pages
+
+        self._render_current_page()
+
+    def _go_to_previous_page(self) -> None:
+        if self._current_page <= 1:
+            return
+
+        self._current_page -= 1
+        self._render_current_page()
+
+    def _go_to_next_page(self) -> None:
+        if self._current_page >= self._total_pages:
+            return
+
+        self._current_page += 1
+        self._render_current_page()
+
+    def _update_pagination_ui(self) -> None:
+        self._page_label.setText(f'Page {self._current_page} / {self._total_pages}')
+        self._prev_button.setEnabled(self._current_page > 1)
+        self._next_button.setEnabled(self._current_page < self._total_pages)

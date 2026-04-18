@@ -1,6 +1,9 @@
+from datetime import UTC, datetime
+import random
 from typing import Any
 
-from PySide6.QtCore import Qt, Signal
+from app.constants.data_schema import SCHEMA
+from PySide6.QtCore import QSettings, Qt, Signal
 from PySide6.QtGui import QCloseEvent, QHideEvent, QShowEvent
 from PySide6.QtWidgets import (
 	QCheckBox,
@@ -121,18 +124,88 @@ class TargetSection(QWidget):
 	def target_id(self) -> int:
 		return self._target_id_input.value()
 
+	def set_coordinates(self, latitude: float, longitude: float) -> None:
+		self._latitude_input.setValue(latitude)
+		self._longitude_input.setValue(longitude)
+
+
+class RdfStationSection(QWidget):
+	rdf_send_requested = Signal(dict)
+
+	def __init__(self, station_id: int, default_bearing_deg: float) -> None:
+		super().__init__()
+		self._station_id = station_id
+
+		self._frequency_input = QDoubleSpinBox()
+		self._frequency_input.setRange(1.0, 6_000_000_000.0)
+		self._frequency_input.setDecimals(0)
+		self._frequency_input.setSingleStep(100.0)
+		self._frequency_input.setValue(2_400_000_000.0)
+
+		self._bearing_input = QDoubleSpinBox()
+		self._bearing_input.setRange(0.0, 359.999)
+		self._bearing_input.setDecimals(0)
+		self._bearing_input.setSingleStep(1.0)
+		self._bearing_input.setValue(default_bearing_deg)
+
+		self._send_button = QPushButton(f'Send Station {station_id}')
+		self._send_button.clicked.connect(self._on_send_clicked)
+
+		layout = QVBoxLayout(self)
+		layout.addWidget(QLabel(f'RDF Station {station_id}', self))
+		layout.addLayout(self._labeled_row('Frequency (Hz)', self._frequency_input))
+		layout.addLayout(self._labeled_row('Bearing (deg)', self._bearing_input))
+		layout.addWidget(self._send_button)
+
+	def _labeled_row(self, label: str, widget: QWidget) -> QHBoxLayout:
+		row = QHBoxLayout()
+		row.addWidget(QLabel(label, self))
+		row.addWidget(widget)
+		return row
+
+	def _on_send_clicked(self) -> None:
+		self.rdf_send_requested.emit(
+			{
+				SCHEMA.STATION_ID: self._station_id,
+				SCHEMA.FREQUENCY: self._frequency_input.value(),
+				SCHEMA.BEARING: self._bearing_input.value(),
+				SCHEMA.DATETIME: datetime.now(UTC).isoformat(),
+			}
+		)
+
 
 class SimulatorView(QWidget):
 	start_simulation_requested = Signal(dict)
 	stop_simulation_requested = Signal(int)
+	stop_all_simulation_requested = Signal()
+	rdf_send_requested = Signal(dict)
 	visibility_changed = Signal(bool)
 
-	def __init__(self, parent: QWidget | None = None) -> None:
+	def __init__(self, settings: QSettings, parent: QWidget | None = None) -> None:
 		super().__init__(parent, Qt.WindowType.Window)
+		self._settings = settings
 		self.setWindowTitle('Simulator')
 		self.resize(420, 500)
+		self._next_auto_target_id = 1000
+		self._random = random.Random()
 
 		layout = QVBoxLayout(self)
+
+		self._simulate_multiple_count = QSpinBox()
+		self._simulate_multiple_count.setRange(1, 200)
+		self._simulate_multiple_count.setValue(5)
+
+		self._simulate_multiple_button = QPushButton('Simulate multiple')
+		self._simulate_multiple_button.clicked.connect(self._on_simulate_multiple)
+		self._stop_all_button = QPushButton('Stop all')
+		self._stop_all_button.clicked.connect(self.stop_all_simulation_requested.emit)
+
+		multi_row = QHBoxLayout()
+		multi_row.addWidget(QLabel('Count', self))
+		multi_row.addWidget(self._simulate_multiple_count)
+		multi_row.addWidget(self._simulate_multiple_button)
+		multi_row.addWidget(self._stop_all_button)
+		layout.addLayout(multi_row)
 
 		self.target_sections: list[TargetSection] = [
 			TargetSection(title='Target 1', default_target_id=1),
@@ -140,11 +213,126 @@ class SimulatorView(QWidget):
 		]
 
 		for section in self.target_sections:
-			section.start_requested.connect(self.start_simulation_requested.emit)
+			section.start_requested.connect(self._on_start_requested)
 			section.stop_requested.connect(self.stop_simulation_requested.emit)
 			layout.addWidget(section)
 
+		self._rdf_station_sections = [
+			RdfStationSection(station_id=1, default_bearing_deg=45.0),
+			RdfStationSection(station_id=2, default_bearing_deg=315.0),
+		]
+		for rdf_section in self._rdf_station_sections:
+			rdf_section.rdf_send_requested.connect(self.rdf_send_requested.emit)
+			layout.addWidget(rdf_section)
+
 		layout.addStretch()
+		self._load_recent_coordinates()
+
+	def _on_start_requested(self, target_data: dict[str, Any]) -> None:
+		self._save_recent_coordinates(target_data)
+		self.start_simulation_requested.emit(target_data)
+
+	def _on_simulate_multiple(self) -> None:
+		count = self._simulate_multiple_count.value()
+		base_latitude_value = self._settings.value(
+			'simulator/recent/latitude',
+			0.0,
+			type=float,
+		)
+		base_longitude_value = self._settings.value(
+			'simulator/recent/longitude',
+			0.0,
+			type=float,
+		)
+
+		base_latitude = 0.0
+		base_longitude = 0.0
+
+		if isinstance(base_latitude_value, (int, float, str)):
+			try:
+				base_latitude = float(base_latitude_value)
+			except (TypeError, ValueError):
+				base_latitude = 0.0
+
+		if isinstance(base_longitude_value, (int, float, str)):
+			try:
+				base_longitude = float(base_longitude_value)
+			except (TypeError, ValueError):
+				base_longitude = 0.0
+
+		for _ in range(count):
+			target_id = self._next_available_auto_target_id()
+			latitude = base_latitude + self._random.uniform(-0.03, 0.03)
+			longitude = base_longitude + self._random.uniform(-0.03, 0.03)
+
+			latitude = max(min(latitude, 89.9), -89.9)
+			longitude = ((longitude + 180.0) % 360.0) - 180.0
+
+			target_data = {
+				'target_name': f'Target {target_id}',
+				'target_id': target_id,
+				'latitude': latitude,
+				'longitude': longitude,
+				'type': self._random.choice(['vehicle', 'target']),
+				'static': False,
+			}
+			self._on_start_requested(target_data)
+
+	def _next_available_auto_target_id(self) -> int:
+		manual_ids = {section.target_id() for section in self.target_sections}
+		while self._next_auto_target_id in manual_ids:
+			self._next_auto_target_id += 1
+
+		target_id = self._next_auto_target_id
+		self._next_auto_target_id += 1
+		return target_id
+
+	def _save_recent_coordinates(self, target_data: dict[str, Any]) -> None:
+		try:
+			target_id = int(target_data['target_id'])
+			latitude = float(target_data['latitude'])
+			longitude = float(target_data['longitude'])
+		except (KeyError, TypeError, ValueError):
+			return
+
+		self._settings.setValue('simulator/recent/latitude', latitude)
+		self._settings.setValue('simulator/recent/longitude', longitude)
+		self._settings.setValue(f'simulator/recent/{target_id}/latitude', latitude)
+		self._settings.setValue(f'simulator/recent/{target_id}/longitude', longitude)
+		self._settings.sync()
+
+	def _load_recent_coordinates(self) -> None:
+		recent_latitude = self._settings.value('simulator/recent/latitude', type=float)
+		recent_longitude = self._settings.value('simulator/recent/longitude', type=float)
+
+		for section in self.target_sections:
+			target_id = section.target_id()
+			latitude = self._settings.value(
+				f'simulator/recent/{target_id}/latitude',
+				recent_latitude,
+				type=float,
+			)
+			longitude = self._settings.value(
+				f'simulator/recent/{target_id}/longitude',
+				recent_longitude,
+				type=float,
+			)
+
+			if latitude is None or longitude is None:
+				continue
+
+			if not isinstance(latitude, (int, float, str)):
+				continue
+			if not isinstance(longitude, (int, float, str)):
+				continue
+
+			try:
+				section.set_coordinates(
+					latitude=float(latitude),
+					longitude=float(longitude),
+				)
+			except (TypeError, ValueError):
+				continue
 
 	def set_target_running(self, target_id: int, running: bool) -> None:
 		for section in self.target_sections:
