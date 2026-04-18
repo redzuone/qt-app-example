@@ -83,22 +83,51 @@ class DataStore(QObject):
         self._flush_batch()
         return self._df.filter(pl.col(SCHEMA.TARGET_ID) == target_id)
 
-    def get_latest_for_target(self, target_id: str) -> dict[str, Any] | None:
+    def _apply_time_range(
+        self,
+        df: pl.DataFrame,
+        start: datetime | None = None,
+        end: datetime | None = None,
+    ) -> pl.DataFrame:
+        if start is not None and end is not None and start > end:
+            return df.clear()
+
+        if start is not None:
+            df = df.filter(pl.col(SCHEMA.DATETIME) >= start)
+        if end is not None:
+            df = df.filter(pl.col(SCHEMA.DATETIME) <= end)
+        return df
+
+    def get_latest_for_target(
+        self,
+        target_id: str,
+        start: datetime | None = None,
+        end: datetime | None = None,
+    ) -> dict[str, Any] | None:
         """Get the most recent row for a specific target."""
         target_df = self.filter_by_target(target_id)
+        target_df = self._apply_time_range(target_df, start=start, end=end)
         if target_df.is_empty():
             return None
         latest_row = target_df.sort(SCHEMA.DATETIME, descending=False).row(-1, named=True)
         return latest_row
 
-    def get_latest_per_target(self) -> pl.DataFrame:
+    def get_latest_per_target(
+        self,
+        start: datetime | None = None,
+        end: datetime | None = None,
+    ) -> pl.DataFrame:
         """Get most recent data for each target with first_seen metadata."""
         self._flush_batch()
 
-        latest_df = self._df.group_by(SCHEMA.TARGET_ID).agg(
+        filtered_df = self._apply_time_range(self._df, start=start, end=end)
+        if filtered_df.is_empty():
+            return filtered_df
+
+        latest_df = filtered_df.group_by(SCHEMA.TARGET_ID).agg(
             pl.all().sort_by(SCHEMA.DATETIME).last()
         )
-        first_seen_df = self._df.group_by(SCHEMA.TARGET_ID).agg(
+        first_seen_df = filtered_df.group_by(SCHEMA.TARGET_ID).agg(
             pl.col(SCHEMA.DATETIME).min().alias(SCHEMA.FIRST_SEEN)
         )
         latest_df = latest_df.join(first_seen_df, on=SCHEMA.TARGET_ID, how='left')
@@ -108,6 +137,8 @@ class DataStore(QObject):
         self,
         max_points_per_target: int = 200,
         target_ids: set[str] | None = None,
+        start: datetime | None = None,
+        end: datetime | None = None,
     ) -> pl.DataFrame:
         """Get recent ordered trail points per target.
 
@@ -124,6 +155,10 @@ class DataStore(QObject):
 
         if target_ids:
             trail_df = self._df.filter(pl.col(SCHEMA.TARGET_ID).is_in(sorted(target_ids)))
+
+        trail_df = self._apply_time_range(trail_df, start=start, end=end)
+        if trail_df.is_empty():
+            return trail_df
 
         trail_df = (
             trail_df

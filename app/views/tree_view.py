@@ -1,11 +1,13 @@
+from datetime import UTC, datetime
 import math
 from typing import Any
 
 import polars as pl
-from PySide6.QtCore import QPoint, Qt, QTimer, Signal
+from PySide6.QtCore import QDateTime, QPoint, Qt, QTimer, Signal
 from PySide6.QtGui import QAction, QColor, QResizeEvent
 from PySide6.QtWidgets import (
     QComboBox,
+    QDateTimeEdit,
     QHBoxLayout,
     QHeaderView,
     QLabel,
@@ -250,6 +252,7 @@ class TreeView(QWidget):
     lock_trail_to_target = Signal(str)
     unlock_trail_from_target = Signal(str)
     clear_all_trail_locks_requested = Signal()
+    time_range_changed = Signal(object, object)
     RESIZE_DEBOUNCE_MS = 120
     SORT_OPTIONS: list[tuple[str, str]] = [
         ('Date/Time', SCHEMA.DATETIME),
@@ -285,6 +288,14 @@ class TreeView(QWidget):
         sort_layout.setContentsMargins(4, 0, 4, 0)
         sort_layout.setSpacing(8)
 
+        start_time_layout = QHBoxLayout()
+        start_time_layout.setContentsMargins(4, 0, 4, 0)
+        start_time_layout.setSpacing(8)
+
+        end_time_layout = QHBoxLayout()
+        end_time_layout.setContentsMargins(4, 0, 4, 0)
+        end_time_layout.setSpacing(8)
+
         self._sort_label = QLabel('Sort by')
         self._sort_selector = QComboBox()
         for label, schema_key in self.SORT_OPTIONS:
@@ -299,11 +310,39 @@ class TreeView(QWidget):
             self._on_sort_changed
         )
 
+        self._start_time_label = QLabel('Start')
+        self._start_time_edit = QDateTimeEdit()
+        self._start_time_edit.setCalendarPopup(True)
+        self._start_time_edit.setTimeSpec(Qt.TimeSpec.LocalTime)
+        self._start_time_edit.setDisplayFormat('yyyy-MM-dd HH:mm:ss')
+        self._start_time_edit.dateTimeChanged.connect(
+            self._on_time_filter_changed
+        )
+
+        self._end_time_label = QLabel('End')
+        self._end_time_edit = QDateTimeEdit()
+        self._end_time_edit.setCalendarPopup(True)
+        self._end_time_edit.setTimeSpec(Qt.TimeSpec.LocalTime)
+        self._end_time_edit.setDisplayFormat('yyyy-MM-dd HH:mm:ss')
+        self._end_time_edit.dateTimeChanged.connect(self._on_time_filter_changed)
+
+        self._reset_time_filter_button = QPushButton('Reset Time Filter')
+        self._reset_time_filter_button.clicked.connect(self._reset_time_filter)
+
         sort_layout.addWidget(self._sort_label)
         sort_layout.addWidget(self._sort_selector)
         sort_layout.addWidget(self._sort_direction_label)
         sort_layout.addWidget(self._sort_direction_selector)
         sort_layout.addStretch(1)
+
+        start_time_layout.addWidget(self._start_time_label)
+        start_time_layout.addWidget(self._start_time_edit)
+        start_time_layout.addStretch(1)
+
+        end_time_layout.addWidget(self._end_time_label)
+        end_time_layout.addWidget(self._end_time_edit)
+        end_time_layout.addWidget(self._reset_time_filter_button)
+        end_time_layout.addStretch(1)
 
         pager_layout = QHBoxLayout()
         pager_layout.setContentsMargins(4, 0, 4, 0)
@@ -322,6 +361,8 @@ class TreeView(QWidget):
         pager_layout.addWidget(self._next_button)
 
         layout.addLayout(sort_layout)
+        layout.addLayout(start_time_layout)
+        layout.addLayout(end_time_layout)
         layout.addWidget(self._tree)
         layout.addLayout(pager_layout)
 
@@ -329,9 +370,11 @@ class TreeView(QWidget):
         self._current_page = 1
         self._total_pages = 1
         self._page_size = 1
+        self._updating_time_controls = False
         self._resize_timer = QTimer(self)
         self._resize_timer.setSingleShot(True)
         self._resize_timer.timeout.connect(self._apply_resized_page_size)
+        self._reset_time_filter()
         self._update_pagination_ui()
 
     def update_tree(self, df: pl.DataFrame) -> None:
@@ -387,6 +430,75 @@ class TreeView(QWidget):
         self._current_page = 1
         self._latest_df = self._sort_df(self._latest_df)
         self._render_current_page()
+
+    def _on_time_filter_changed(self, _: QDateTime) -> None:
+        if self._updating_time_controls:
+            return
+
+        self._normalize_time_range()
+        self._emit_time_range_changed()
+
+    def _reset_time_filter(self) -> None:
+        start_qdt, end_qdt = self._default_time_range_qdatetime()
+        self._updating_time_controls = True
+        try:
+            self._start_time_edit.setDateTime(start_qdt)
+            self._end_time_edit.setDateTime(end_qdt)
+        finally:
+            self._updating_time_controls = False
+        self._emit_time_range_changed()
+
+    def _default_time_range_qdatetime(self) -> tuple[QDateTime, QDateTime]:
+        local_now = datetime.now().astimezone().replace(microsecond=0)
+        start_dt = local_now
+        end_dt = local_now.replace(
+            year=local_now.year + 1,
+        )
+        return (
+            self._local_datetime_to_qdatetime(start_dt),
+            self._local_datetime_to_qdatetime(end_dt),
+        )
+
+    def _normalize_time_range(self) -> None:
+        start_qdt = self._start_time_edit.dateTime()
+        end_qdt = self._end_time_edit.dateTime()
+
+        if start_qdt <= end_qdt:
+            return
+
+        self._updating_time_controls = True
+        try:
+            sender = self.sender()
+            if sender is self._start_time_edit:
+                self._end_time_edit.setDateTime(start_qdt)
+            else:
+                self._start_time_edit.setDateTime(end_qdt)
+        finally:
+            self._updating_time_controls = False
+
+    def _emit_time_range_changed(self) -> None:
+        start_dt = self._qdatetime_to_utc(self._start_time_edit.dateTime())
+        end_dt = self._qdatetime_to_utc(self._end_time_edit.dateTime())
+        self.time_range_changed.emit(start_dt, end_dt)
+
+    def current_time_range_utc(self) -> tuple[datetime | None, datetime | None]:
+        return (
+            self._qdatetime_to_utc(self._start_time_edit.dateTime()),
+            self._qdatetime_to_utc(self._end_time_edit.dateTime()),
+        )
+
+    def _local_datetime_to_qdatetime(self, value: datetime) -> QDateTime:
+        if value.tzinfo is None:
+            value = value.astimezone()
+        else:
+            value = value.astimezone()
+        ms = int(value.timestamp() * 1000)
+        return QDateTime.fromMSecsSinceEpoch(ms, Qt.TimeSpec.LocalTime)
+
+    def _qdatetime_to_utc(self, value: QDateTime) -> datetime | None:
+        if not value.isValid():
+            return None
+        return datetime.fromtimestamp(value.toMSecsSinceEpoch() / 1000, tz=UTC)
 
     def _render_current_page(self) -> None:
         if self._latest_df.is_empty():

@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime
 from typing import Any
 
 from PySide6.QtCore import QSettings
@@ -37,6 +38,8 @@ class AppController:
         self._rdf_service: RdfService | None = rdf_service
         self._show_full_trails = False
         self._locked_trail_target_ids: set[str] = set()
+        self._time_filter_start: datetime | None = None
+        self._time_filter_end: datetime | None = None
 
         # Connect signals by feature groups, regardless of direction
         if self._simulator_service is not None:
@@ -134,6 +137,11 @@ class AppController:
         tree_view.lock_trail_to_target.connect(self._on_lock_trail_to_target)
         tree_view.unlock_trail_from_target.connect(self._on_unlock_trail_from_target)
         tree_view.clear_all_trail_locks_requested.connect(self._on_clear_all_trail_locks)
+        tree_view.time_range_changed.connect(self._on_tree_time_range_changed)
+
+        # Sync controller-owned filter state with current tree control values.
+        start_dt, end_dt = tree_view.current_time_range_utc()
+        self._on_tree_time_range_changed(start_dt, end_dt)
 
     def _connect_map(self) -> None:
         if self._map_service is not None:
@@ -153,7 +161,10 @@ class AppController:
         if self._map_service is None or self._data_store is None:
             return
 
-        latest_row = self._data_store.get_latest_for_target(target_id)
+        latest_row = self._data_store.get_latest_for_target(
+            target_id,
+            **self._time_filter_kwargs(),
+        )
         if latest_row is None:
             logger.warning(f'No data found for target {target_id}')
             return
@@ -175,7 +186,9 @@ class AppController:
 
     def _handle_data_updated(self) -> None:
         '''Handle updates from data store'''
-        latest_df = self._data_store.get_latest_per_target()
+        latest_df = self._data_store.get_latest_per_target(
+            **self._time_filter_kwargs(),
+        )
         self._view.update_table(latest_df)
         if self._view.tree_view is not None:
             self._view.tree_view.update_tree(latest_df)
@@ -191,11 +204,27 @@ class AppController:
         trail_df = self._data_store.get_trail_points_per_target(
             max_points_per_target,
             self._locked_trail_target_ids or None,
+            **self._time_filter_kwargs(),
         )
         self._map_service.update_trails(
             trail_df,
             not self._show_full_trails,
         )
+
+    def _time_filter_kwargs(self) -> dict[str, datetime | None]:
+        return {
+            'start': self._time_filter_start,
+            'end': self._time_filter_end,
+        }
+
+    def _on_tree_time_range_changed(
+        self,
+        start: datetime | None,
+        end: datetime | None,
+    ) -> None:
+        self._time_filter_start = start
+        self._time_filter_end = end
+        self._handle_data_updated()
 
     def _on_trail_mode_toggled(self, enabled: bool) -> None:
         self._show_full_trails = enabled
