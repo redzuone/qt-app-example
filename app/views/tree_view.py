@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.constants.data_schema import SCHEMA
+from app.utils.datetime_utils import format_datetime_local
 from app.utils.target_color import target_color_hex, target_text_color_hex
 
 
@@ -104,7 +105,7 @@ class TargetTreeWidget(QTreeWidget):
             # Update parent item data
             parent_item.setText(0, target_name)
             parent_item.setText(1, target_id)
-            parent_item.setText(2, str(datetime_val))
+            parent_item.setText(2, format_datetime_local(datetime_val))
             if target_id_col is not None:
                 bg_color = target_color_hex(target_id)
                 fg_color = target_text_color_hex(bg_color)
@@ -170,13 +171,17 @@ class TargetTreeWidget(QTreeWidget):
             if field_key in row:
                 value = row[field_key]
                 if value is None:
-                    value = ''
+                    display = ''
                 elif field_key in [SCHEMA.LATITUDE, SCHEMA.LONGITUDE]:
-                    value = f'{value:.6f}'
+                    display = f'{value:.6f}'
+                elif field_key in {SCHEMA.DATETIME, SCHEMA.FIRST_SEEN}:
+                    display = format_datetime_local(value)
+                else:
+                    display = str(value)
 
                 child_item = QTreeWidgetItem(parent_item)
                 child_item.setText(0, field_label)
-                child_item.setText(1, str(value))
+                child_item.setText(1, display)
 
     def _restore_selection(
         self, selected_target_id: str | None, selected_child_index: int | None
