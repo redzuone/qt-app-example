@@ -92,6 +92,7 @@ class AppController:
         simulator_view = self._view.simulator_view
         simulator_view.rdf_send_requested.connect(rdf_service.submit_report)
         rdf_service.rdf_report_received.connect(self._handle_rdf_report)
+        rdf_service.rdf_report_received.connect(self._view.rdf_view.update_rdf_data)
         rdf_service.triangulated_fix_ready.connect(self._handle_raw_data)
         self._apply_rdf_settings_to_service()
 

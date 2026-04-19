@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
 
 from app.constants import APP_DISPLAY_NAME
 from app.views.map_view import MapView
+from app.views.rdf_view import RdfView
 from app.views.simulator_view import SimulatorView
 from app.views.spectrum_view import SpectrumView
 from app.views.table_view import TableView
@@ -49,8 +50,10 @@ class MainWindow(QMainWindow):
 
         self.spectrum_view = SpectrumView()
         self.waterfall_view = WaterfallView()
+        self.rdf_view = RdfView()
         self.register_aux_window(self.spectrum_view)
         self.register_aux_window(self.waterfall_view)
+        self.register_aux_window(self.rdf_view)
 
         self._main_splitter = QSplitter()
         self._left_splitter = QSplitter(Qt.Orientation.Vertical)
@@ -78,6 +81,7 @@ class MainWindow(QMainWindow):
         view_menu.addAction('Tree', lambda: self._toggle_visibility(self.tree_view))
         view_menu.addAction('Spectrum', lambda: self._toggle_visibility(self.spectrum_view))
         view_menu.addAction('Waterfall', lambda: self._toggle_visibility(self.waterfall_view))
+        view_menu.addAction('RDF Bearing-Time', lambda: self._toggle_visibility(self.rdf_view))
         map_submenu = view_menu.addMenu('Map')
 
         self._target_labels_action = QAction('Target Labels', self)
