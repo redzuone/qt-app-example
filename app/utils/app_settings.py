@@ -102,11 +102,15 @@ def save_settings(qs: QSettings, settings: AppSettings) -> None:
     qs.setValue('rdf/station/1/latitude', settings.rdf_station_1_latitude)
     qs.setValue('rdf/station/1/longitude', settings.rdf_station_1_longitude)
     qs.setValue('rdf/station/1/altitude_m', settings.rdf_station_1_altitude_m)
-    qs.setValue('rdf/station/1/bearing_offset_deg', settings.rdf_station_1_bearing_offset_deg)
+    qs.setValue(
+        'rdf/station/1/bearing_offset_deg', settings.rdf_station_1_bearing_offset_deg
+    )
     qs.setValue('rdf/station/2/latitude', settings.rdf_station_2_latitude)
     qs.setValue('rdf/station/2/longitude', settings.rdf_station_2_longitude)
     qs.setValue('rdf/station/2/altitude_m', settings.rdf_station_2_altitude_m)
-    qs.setValue('rdf/station/2/bearing_offset_deg', settings.rdf_station_2_bearing_offset_deg)
+    qs.setValue(
+        'rdf/station/2/bearing_offset_deg', settings.rdf_station_2_bearing_offset_deg
+    )
     qs.setValue(
         'rdf/frequency_tolerance_hz',
         max(0.0, settings.rdf_frequency_tolerance_hz),

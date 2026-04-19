@@ -36,7 +36,9 @@ class _StationConfig:
 class _RdfTrackIndex:
     """Simple in-memory proximity matcher for stable RDF fix IDs."""
 
-    def __init__(self, max_age_seconds: int = 600, match_radius_m: float = 1_500.0) -> None:
+    def __init__(
+        self, max_age_seconds: int = 600, match_radius_m: float = 1_500.0
+    ) -> None:
         self._points: list[_TrackPoint] = []
         self._next_id = 1
         self._max_age = timedelta(seconds=max(max_age_seconds, 1))
@@ -53,7 +55,9 @@ class _RdfTrackIndex:
         longitude: float,
         now: datetime,
     ) -> str:
-        self._points = [point for point in self._points if now - point.updated_at <= self._max_age]
+        self._points = [
+            point for point in self._points if now - point.updated_at <= self._max_age
+        ]
 
         best_point: _TrackPoint | None = None
         best_distance = float('inf')
@@ -132,7 +136,11 @@ class RdfTriangulationWorker(QObject):
         self._track_index.set_match_radius(self._distance_tolerance_m)
 
     @Slot(dict, dict)
-    def triangulate(self, report_a: dict[str, float | int | str], report_b: dict[str, float | int | str]) -> None:
+    def triangulate(
+        self,
+        report_a: dict[str, float | int | str],
+        report_b: dict[str, float | int | str],
+    ) -> None:
         triangulation = self._triangulate_reports(report_a=report_a, report_b=report_b)
         if triangulation is None:
             return
@@ -150,7 +158,6 @@ class RdfTriangulationWorker(QObject):
         if crossing_error_m > self._distance_tolerance_m:
             return
 
-
         payload = {
             SCHEMA.TYPE: 'rdf_fix',
             SCHEMA.TARGET_ID: fix_id,
@@ -164,7 +171,9 @@ class RdfTriangulationWorker(QObject):
         self.triangulation_ready.emit(payload)
 
     def _triangulate_reports(
-        self, report_a: dict[str, float | int | str], report_b: dict[str, float | int | str]
+        self,
+        report_a: dict[str, float | int | str],
+        report_b: dict[str, float | int | str],
     ) -> tuple[float, float, float] | None:
         station_a = int(report_a[SCHEMA.STATION_ID])
         station_b = int(report_b[SCHEMA.STATION_ID])
@@ -242,7 +251,9 @@ class RdfService(QObject):
         self._triangulate_requested.connect(self._worker.triangulate)
         self._set_sensor_center_requested.connect(self._worker.set_sensor_center)
         self._configure_station_requested.connect(self._worker.configure_station)
-        self._set_distance_tolerance_requested.connect(self._worker.set_distance_tolerance)
+        self._set_distance_tolerance_requested.connect(
+            self._worker.set_distance_tolerance
+        )
         self._thread.start()
 
     @Slot(float, float)
@@ -322,7 +333,7 @@ class RdfService(QObject):
             station_id = int(payload[SCHEMA.STATION_ID])
             frequency_hz = float(payload[SCHEMA.FREQUENCY])
             bearing_deg = float(payload[SCHEMA.BEARING])
-        except (KeyError, TypeError, ValueError):
+        except KeyError, TypeError, ValueError:
             return None
 
         if station_id not in (1, 2):
@@ -365,10 +376,18 @@ class RdfService(QObject):
         best_match: RdfReport | None = None
         best_delta_seconds = float('inf')
         for candidate in station_queue:
-            if abs(candidate.frequency_hz - report.frequency_hz) > self._frequency_tolerance_hz:
+            if (
+                abs(candidate.frequency_hz - report.frequency_hz)
+                > self._frequency_tolerance_hz
+            ):
                 continue
-            delta_seconds = abs((report.timestamp - candidate.timestamp).total_seconds())
-            if delta_seconds <= self._window_seconds and delta_seconds < best_delta_seconds:
+            delta_seconds = abs(
+                (report.timestamp - candidate.timestamp).total_seconds()
+            )
+            if (
+                delta_seconds <= self._window_seconds
+                and delta_seconds < best_delta_seconds
+            ):
                 best_match = candidate
                 best_delta_seconds = delta_seconds
 
@@ -384,6 +403,9 @@ def _haversine_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
 
     sin_dphi = math.sin(d_phi / 2.0)
     sin_dlambda = math.sin(d_lambda / 2.0)
-    a = sin_dphi * sin_dphi + math.cos(phi1) * math.cos(phi2) * sin_dlambda * sin_dlambda
+    a = (
+        sin_dphi * sin_dphi
+        + math.cos(phi1) * math.cos(phi2) * sin_dlambda * sin_dlambda
+    )
     c = 2.0 * math.atan2(math.sqrt(a), math.sqrt(1.0 - a))
     return radius * c

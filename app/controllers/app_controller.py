@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime
 from typing import Any
 
 from PySide6.QtCore import QSettings
@@ -37,6 +38,8 @@ class AppController:
         self._rdf_service: RdfService | None = rdf_service
         self._show_full_trails = False
         self._locked_trail_target_ids: set[str] = set()
+        self._time_filter_start: datetime | None = None
+        self._time_filter_end: datetime | None = None
 
         # Connect signals by feature groups, regardless of direction
         if self._simulator_service is not None:
@@ -61,9 +64,7 @@ class AppController:
         simulator_view.stop_simulation_requested.connect(
             simulator_service.stop_simulation
         )
-        simulator_view.stop_all_simulation_requested.connect(
-            simulator_service.stop_all
-        )
+        simulator_view.stop_all_simulation_requested.connect(simulator_service.stop_all)
 
         simulator_service.simulation_started.connect(
             lambda target_id: simulator_view.set_target_running(target_id, True)
@@ -72,6 +73,19 @@ class AppController:
             lambda target_id: simulator_view.set_target_running(target_id, False)
         )
         simulator_service.new_raw_data.connect(self._handle_raw_data)
+        simulator_view.spectrum_start_requested.connect(
+            simulator_service.start_spectrum
+        )
+        simulator_view.spectrum_stop_requested.connect(simulator_service.stop_spectrum)
+        simulator_view.spectrum_station_changed.connect(
+            simulator_service.set_spectrum_station_id
+        )
+        simulator_service.new_spectrum_data.connect(
+            self._view.spectrum_view.update_spectrum
+        )
+        simulator_service.new_spectrum_data.connect(
+            self._view.waterfall_view.update_waterfall
+        )
 
     def _connect_rdf(self) -> None:
         rdf_service = self._rdf_service
@@ -81,6 +95,7 @@ class AppController:
         simulator_view = self._view.simulator_view
         simulator_view.rdf_send_requested.connect(rdf_service.submit_report)
         rdf_service.rdf_report_received.connect(self._handle_rdf_report)
+        rdf_service.rdf_report_received.connect(self._view.rdf_view.update_rdf_data)
         rdf_service.triangulated_fix_ready.connect(self._handle_raw_data)
         self._apply_rdf_settings_to_service()
 
@@ -106,9 +121,7 @@ class AppController:
         rdf_service.set_frequency_tolerance(
             self._app_settings.rdf_frequency_tolerance_hz
         )
-        rdf_service.set_distance_tolerance(
-            self._app_settings.rdf_distance_tolerance_m
-        )
+        rdf_service.set_distance_tolerance(self._app_settings.rdf_distance_tolerance_m)
 
     def _connect_data_store(self) -> None:
         data_store = self._data_store
@@ -119,21 +132,26 @@ class AppController:
         )
 
     def _connect_table_view(self) -> None:
-        '''Connect table view signals'''
+        """Connect table view signals"""
         self._view.table_view.view_target_on_map.connect(self._on_view_target_on_map)
 
     def _connect_tree_view(self) -> None:
-        '''Connect tree view signals'''
+        """Connect tree view signals"""
         tree_view = self._view.tree_view
         if tree_view is None:
             return
         tree_view.view_target_on_map.connect(self._on_view_target_on_map)
-        tree_view.delete_target_by_id.connect(
-            self._data_store.delete_target
-        )
+        tree_view.delete_target_by_id.connect(self._data_store.delete_target)
         tree_view.lock_trail_to_target.connect(self._on_lock_trail_to_target)
         tree_view.unlock_trail_from_target.connect(self._on_unlock_trail_from_target)
-        tree_view.clear_all_trail_locks_requested.connect(self._on_clear_all_trail_locks)
+        tree_view.clear_all_trail_locks_requested.connect(
+            self._on_clear_all_trail_locks
+        )
+        tree_view.time_range_changed.connect(self._on_tree_time_range_changed)
+
+        # Sync controller-owned filter state with current tree control values.
+        start_dt, end_dt = tree_view.current_time_range_utc()
+        self._on_tree_time_range_changed(start_dt, end_dt)
 
     def _connect_map(self) -> None:
         if self._map_service is not None:
@@ -149,15 +167,18 @@ class AppController:
         self._view.map_target_labels_toggled.connect(self._on_map_target_labels_toggled)
 
     def _on_view_target_on_map(self, target_id: str) -> None:
-        '''Handle view target on map request'''
+        """Handle view target on map request"""
         if self._map_service is None or self._data_store is None:
             return
 
-        latest_row = self._data_store.get_latest_for_target(target_id)
+        latest_row = self._data_store.get_latest_for_target(
+            target_id,
+            **self._time_filter_kwargs(),
+        )
         if latest_row is None:
             logger.warning(f'No data found for target {target_id}')
             return
- 
+
         latitude = latest_row.get(SCHEMA.LATITUDE)
         longitude = latest_row.get(SCHEMA.LONGITUDE)
 
@@ -174,8 +195,10 @@ class AppController:
         self._data_store.add_rdf_report(payload)
 
     def _handle_data_updated(self) -> None:
-        '''Handle updates from data store'''
-        latest_df = self._data_store.get_latest_per_target()
+        """Handle updates from data store"""
+        latest_df = self._data_store.get_latest_per_target(
+            **self._time_filter_kwargs(),
+        )
         self._view.update_table(latest_df)
         if self._view.tree_view is not None:
             self._view.tree_view.update_tree(latest_df)
@@ -191,11 +214,27 @@ class AppController:
         trail_df = self._data_store.get_trail_points_per_target(
             max_points_per_target,
             self._locked_trail_target_ids or None,
+            **self._time_filter_kwargs(),
         )
         self._map_service.update_trails(
             trail_df,
             not self._show_full_trails,
         )
+
+    def _time_filter_kwargs(self) -> dict[str, datetime | None]:
+        return {
+            'start': self._time_filter_start,
+            'end': self._time_filter_end,
+        }
+
+    def _on_tree_time_range_changed(
+        self,
+        start: datetime | None,
+        end: datetime | None,
+    ) -> None:
+        self._time_filter_start = start
+        self._time_filter_end = end
+        self._handle_data_updated()
 
     def _on_trail_mode_toggled(self, enabled: bool) -> None:
         self._show_full_trails = enabled
@@ -205,7 +244,6 @@ class AppController:
         if self._map_service is None:
             return
         self._map_service.send_cmd('set_target_labels', {'show': enabled})
-
 
     def _on_lock_trail_to_target(self, target_id: str) -> None:
         self._locked_trail_target_ids.add(target_id)
@@ -238,8 +276,12 @@ class AppController:
 
         latitude, longitude = dialog.sensor_center()
         map_brightness = dialog.map_brightness()
-        station_1_lat, station_1_lon, station_1_alt, station_1_offset = dialog.rdf_station_1()
-        station_2_lat, station_2_lon, station_2_alt, station_2_offset = dialog.rdf_station_2()
+        station_1_lat, station_1_lon, station_1_alt, station_1_offset = (
+            dialog.rdf_station_1()
+        )
+        station_2_lat, station_2_lon, station_2_alt, station_2_offset = (
+            dialog.rdf_station_2()
+        )
         rdf_frequency_tolerance_hz = dialog.rdf_frequency_tolerance_hz()
         rdf_distance_tolerance_m = dialog.rdf_distance_tolerance_m()
         self._app_settings.sensor_latitude = latitude
@@ -270,7 +312,9 @@ class AppController:
 
         self._apply_rdf_settings_to_service()
 
-    def _handle_map_web_message(self, connection_id: int, message: dict[str, Any]) -> None:
+    def _handle_map_web_message(
+        self, connection_id: int, message: dict[str, Any]
+    ) -> None:
         if self._map_service is None:
             return
 

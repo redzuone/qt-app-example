@@ -48,7 +48,7 @@ class DataStore(QObject):
         data[SCHEMA.DATETIME] = datetime.fromisoformat(data[SCHEMA.DATETIME])
 
         self._batch.append(data)
-        
+
         if not self._batch_timer.isActive():
             self._batch_timer.start(self._batch_timeout_ms)
 
@@ -83,22 +83,53 @@ class DataStore(QObject):
         self._flush_batch()
         return self._df.filter(pl.col(SCHEMA.TARGET_ID) == target_id)
 
-    def get_latest_for_target(self, target_id: str) -> dict[str, Any] | None:
+    def _apply_time_range(
+        self,
+        df: pl.DataFrame,
+        start: datetime | None = None,
+        end: datetime | None = None,
+    ) -> pl.DataFrame:
+        if start is not None and end is not None and start > end:
+            return df.clear()
+
+        if start is not None:
+            df = df.filter(pl.col(SCHEMA.DATETIME) >= start)
+        if end is not None:
+            df = df.filter(pl.col(SCHEMA.DATETIME) <= end)
+        return df
+
+    def get_latest_for_target(
+        self,
+        target_id: str,
+        start: datetime | None = None,
+        end: datetime | None = None,
+    ) -> dict[str, Any] | None:
         """Get the most recent row for a specific target."""
         target_df = self.filter_by_target(target_id)
+        target_df = self._apply_time_range(target_df, start=start, end=end)
         if target_df.is_empty():
             return None
-        latest_row = target_df.sort(SCHEMA.DATETIME, descending=False).row(-1, named=True)
+        latest_row = target_df.sort(SCHEMA.DATETIME, descending=False).row(
+            -1, named=True
+        )
         return latest_row
 
-    def get_latest_per_target(self) -> pl.DataFrame:
+    def get_latest_per_target(
+        self,
+        start: datetime | None = None,
+        end: datetime | None = None,
+    ) -> pl.DataFrame:
         """Get most recent data for each target with first_seen metadata."""
         self._flush_batch()
 
-        latest_df = self._df.group_by(SCHEMA.TARGET_ID).agg(
+        filtered_df = self._apply_time_range(self._df, start=start, end=end)
+        if filtered_df.is_empty():
+            return filtered_df
+
+        latest_df = filtered_df.group_by(SCHEMA.TARGET_ID).agg(
             pl.all().sort_by(SCHEMA.DATETIME).last()
         )
-        first_seen_df = self._df.group_by(SCHEMA.TARGET_ID).agg(
+        first_seen_df = filtered_df.group_by(SCHEMA.TARGET_ID).agg(
             pl.col(SCHEMA.DATETIME).min().alias(SCHEMA.FIRST_SEEN)
         )
         latest_df = latest_df.join(first_seen_df, on=SCHEMA.TARGET_ID, how='left')
@@ -108,6 +139,8 @@ class DataStore(QObject):
         self,
         max_points_per_target: int = 200,
         target_ids: set[str] | None = None,
+        start: datetime | None = None,
+        end: datetime | None = None,
     ) -> pl.DataFrame:
         """Get recent ordered trail points per target.
 
@@ -123,16 +156,18 @@ class DataStore(QObject):
         trail_df = self._df
 
         if target_ids:
-            trail_df = self._df.filter(pl.col(SCHEMA.TARGET_ID).is_in(sorted(target_ids)))
-
-        trail_df = (
-            trail_df
-            .filter(
-                pl.col(SCHEMA.LATITUDE).is_not_null()
-                & pl.col(SCHEMA.LONGITUDE).is_not_null()
+            trail_df = self._df.filter(
+                pl.col(SCHEMA.TARGET_ID).is_in(sorted(target_ids))
             )
-            .sort([SCHEMA.TARGET_ID, SCHEMA.DATETIME])
-        )
+
+        trail_df = self._apply_time_range(trail_df, start=start, end=end)
+        if trail_df.is_empty():
+            return trail_df
+
+        trail_df = trail_df.filter(
+            pl.col(SCHEMA.LATITUDE).is_not_null()
+            & pl.col(SCHEMA.LONGITUDE).is_not_null()
+        ).sort([SCHEMA.TARGET_ID, SCHEMA.DATETIME])
 
         if max_points_per_target > 0:
             trail_df = trail_df.group_by(
@@ -164,7 +199,7 @@ class DataStore(QObject):
             station_id = int(report[SCHEMA.STATION_ID])
             frequency_hz = float(report[SCHEMA.FREQUENCY])
             bearing_deg = float(report[SCHEMA.BEARING])
-        except (KeyError, TypeError, ValueError):
+        except KeyError, TypeError, ValueError:
             return
 
         rdf_row = {
@@ -195,7 +230,7 @@ class DataStore(QObject):
         self._df = self._df.clear()
         self._rdf_df = self._rdf_df.clear()
         self.data_updated.emit()
-    
+
     def delete_target(self, target_id: str) -> None:
         """Delete all detections for a given target ID"""
         self._flush_batch()

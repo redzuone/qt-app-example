@@ -136,7 +136,7 @@ def _read_project_name_from_pyproject() -> str | None:
 
         try:
             content = tomllib.loads(candidate.read_text(encoding='utf-8'))
-        except (OSError, tomllib.TOMLDecodeError):
+        except OSError, tomllib.TOMLDecodeError:
             continue
 
         project_section = content.get('project')
@@ -208,7 +208,9 @@ def _is_stream_usable(stream: Any) -> bool:
 
 
 def _install_uncaught_exception_hooks() -> None:
-    def _log_excepthook(exc_type: type[BaseException], exc_value: BaseException, exc_traceback: Any) -> None:
+    def _log_excepthook(
+        exc_type: type[BaseException], exc_value: BaseException, exc_traceback: Any
+    ) -> None:
         if issubclass(exc_type, KeyboardInterrupt):
             sys.__excepthook__(exc_type, exc_value, exc_traceback)
             return

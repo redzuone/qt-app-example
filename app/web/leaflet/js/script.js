@@ -55,15 +55,15 @@ function connectHeartbeatSocket() {
 
             if (message.type === 'cmd') {
                 console.log('Command from python', message);
-                
+
                 if (message.command === 'update_targets' && message.data) {
                     updateTargetMarkers(message.data);
                 }
-                
+
                 if (message.command === 'focus_target' && message.data) {
                     focusTarget(message.data);
                 }
-                
+
                 sendWsJson({
                     type: 'cmd_ack',
                     command: message.command,
@@ -119,7 +119,7 @@ function updateTargetMarkers(geojson) {
                 lastOpenPopupTargetId = openPopupLayer.feature.properties.target_id;
             }
         }
-        
+
         map.removeLayer(realtimeLayer);
         realtimeLayer = null;
         markerTypeMap = {};
@@ -166,7 +166,7 @@ function initializeRealtimeLayer() {
             pointToLayer: function (feature, latlng) {
                 const featureType = feature.properties.type;
                 markerTypeMap[feature.properties.target_id] = featureType;
-                
+
                 if (featureType === 'vehicle') {
                     // Arrow image for vehicle type
                     const vehicleIcon = L.icon({
