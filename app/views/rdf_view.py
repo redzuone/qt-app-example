@@ -72,7 +72,6 @@ class RDFBearingTimePlot(QWidget):
         self._plot_widget.setYRange(0, 360)
         self._plot_widget.setLimits(yMin=0, yMax=360)
         self._plot_widget.showGrid(x=True, y=True, alpha=0.25)
-        self._plot_widget.setTitle(title)
         self._plot_widget.enableAutoRange(axis='x')
         self._legend = self._plot_widget.addLegend()
         self._configure_legend()
