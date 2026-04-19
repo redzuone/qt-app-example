@@ -78,12 +78,12 @@ class MapService:
 
     def focus_target(self, target_id: str, latitude: float, longitude: float) -> None:
         """Focus/center map on a specific target.
-        
+
         Args:
             target_id: The target ID to focus on
             latitude: Latitude coordinate
             longitude: Longitude coordinate
-            
+
         Returns:
             The command ID
         """
@@ -143,7 +143,7 @@ class MapService:
 
     def update_targets(self, df: pl.DataFrame) -> None:
         """Convert polars DataFrame to GeoJSON and send to web clients.
-        
+
         Args:
             df: DataFrame with columns: target_id, target_name, type, datetime,
                 latitude, longitude, height, speed
@@ -152,12 +152,12 @@ class MapService:
             geojson: dict[str, Any] = {'type': 'FeatureCollection', 'features': []}
         else:
             records = df.to_dicts()
-            
+
             features = []
             for record in records:
                 dt_value = record.get(SCHEMA.DATETIME)
                 datetime_str = dt_value.isoformat() if dt_value is not None else None
-                
+
                 feature = {
                     'type': 'Feature',
                     'geometry': {
@@ -178,9 +178,9 @@ class MapService:
                     },
                 }
                 features.append(feature)
-            
+
             geojson = {'type': 'FeatureCollection', 'features': features}
-        
+
         self.send_cmd(command='update_targets', data=geojson)
 
     def update_trails(self, df: pl.DataFrame, fade_segments: bool = True) -> None:
@@ -239,7 +239,7 @@ class MapService:
                 start_coord = coordinates[segment_index]
                 end_coord = coordinates[segment_index + 1]
                 progress = (segment_index + 1) / total_segments
-                eased_progress = progress ** 2.8
+                eased_progress = progress**2.8
                 alpha = min_alpha + (alpha_range * eased_progress)
 
                 features.append(

@@ -282,9 +282,7 @@ class TreeView(QWidget):
         self._tree.view_target_on_map.connect(self.view_target_on_map.emit)
         self._tree.delete_target_by_id.connect(self.delete_target_by_id.emit)
         self._tree.lock_trail_to_target.connect(self.lock_trail_to_target.emit)
-        self._tree.unlock_trail_from_target.connect(
-            self.unlock_trail_from_target.emit
-        )
+        self._tree.unlock_trail_from_target.connect(self.unlock_trail_from_target.emit)
         self._tree.clear_all_trail_locks_requested.connect(
             self.clear_all_trail_locks_requested.emit
         )
@@ -311,18 +309,14 @@ class TreeView(QWidget):
         self._sort_direction_selector = QComboBox()
         for label, is_descending in self.SORT_DIRECTION_OPTIONS:
             self._sort_direction_selector.addItem(label, is_descending)
-        self._sort_direction_selector.currentIndexChanged.connect(
-            self._on_sort_changed
-        )
+        self._sort_direction_selector.currentIndexChanged.connect(self._on_sort_changed)
 
         self._start_time_label = QLabel('Start')
         self._start_time_edit = QDateTimeEdit()
         self._start_time_edit.setCalendarPopup(True)
         self._start_time_edit.setTimeSpec(Qt.TimeSpec.LocalTime)
         self._start_time_edit.setDisplayFormat('yyyy-MM-dd HH:mm:ss')
-        self._start_time_edit.dateTimeChanged.connect(
-            self._on_time_filter_changed
-        )
+        self._start_time_edit.dateTimeChanged.connect(self._on_time_filter_changed)
 
         self._end_time_label = QLabel('End')
         self._end_time_edit = QDateTimeEdit()
@@ -414,10 +408,7 @@ class TreeView(QWidget):
         elif SCHEMA.FIRST_SEEN in df.columns:
             sort_columns.append(SCHEMA.FIRST_SEEN)
 
-        if (
-            SCHEMA.TARGET_ID in df.columns
-            and SCHEMA.TARGET_ID not in sort_columns
-        ):
+        if SCHEMA.TARGET_ID in df.columns and SCHEMA.TARGET_ID not in sort_columns:
             sort_columns.append(SCHEMA.TARGET_ID)
 
         if not sort_columns:

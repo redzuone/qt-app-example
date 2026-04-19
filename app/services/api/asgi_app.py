@@ -47,12 +47,16 @@ async def broadcast_json(payload: Mapping[str, Any]) -> int:
             await connection_send({'type': 'websocket.send', 'text': message_text})
             delivered_count += 1
         except Exception:
-            logger.warning('Failed to send websocket message to connection %s.', connection_id)
+            logger.warning(
+                'Failed to send websocket message to connection %s.', connection_id
+            )
 
     return delivered_count
 
 
-async def send_json_to_connection(connection_id: int, payload: Mapping[str, Any]) -> int:
+async def send_json_to_connection(
+    connection_id: int, payload: Mapping[str, Any]
+) -> int:
     message_text = json.dumps(dict(payload))
 
     with _websocket_connections_lock:
@@ -65,7 +69,9 @@ async def send_json_to_connection(connection_id: int, payload: Mapping[str, Any]
         await connection_send({'type': 'websocket.send', 'text': message_text})
         return 1
     except Exception:
-        logger.warning('Failed to send websocket message to connection %s.', connection_id)
+        logger.warning(
+            'Failed to send websocket message to connection %s.', connection_id
+        )
         return 0
 
 
@@ -105,7 +111,9 @@ async def static_web_app(scope: Scope, receive: Receive, send: Send) -> None:
         return
 
     content_type, _ = mimetypes.guess_type(str(requested_path))
-    headers = [(b'content-type', (content_type or 'application/octet-stream').encode('utf-8'))]
+    headers = [
+        (b'content-type', (content_type or 'application/octet-stream').encode('utf-8'))
+    ]
 
     await send({'type': 'http.response.start', 'status': 200, 'headers': headers})
     if method == 'HEAD':
@@ -136,7 +144,9 @@ async def _websocket_hello_app(receive: Receive, send: Send) -> None:
 
     connection_state = {'last_reply_at': time(), 'timeout_logged': False}
     hello_task = asyncio.create_task(_send_hello_interval(send))
-    reply_watchdog_task = asyncio.create_task(_watch_missing_reply(send, connection_state))
+    reply_watchdog_task = asyncio.create_task(
+        _watch_missing_reply(send, connection_state)
+    )
     try:
         while True:
             message = await receive()
@@ -181,7 +191,9 @@ async def _send_hello_interval(send: Send) -> None:
         await asyncio.sleep(HELLO_INTERVAL_SECONDS)
 
 
-async def _watch_missing_reply(send: Send, connection_state: dict[str, float | bool]) -> None:
+async def _watch_missing_reply(
+    send: Send, connection_state: dict[str, float | bool]
+) -> None:
     while True:
         elapsed_seconds = time() - float(connection_state['last_reply_at'])
         if elapsed_seconds > HELLO_REPLY_TIMEOUT_SECONDS:
@@ -192,7 +204,13 @@ async def _watch_missing_reply(send: Send, connection_state: dict[str, float | b
                 )
                 connection_state['timeout_logged'] = True
 
-            await send({'type': 'websocket.close', 'code': 1011, 'reason': 'hello_reply timeout'})
+            await send(
+                {
+                    'type': 'websocket.close',
+                    'code': 1011,
+                    'reason': 'hello_reply timeout',
+                }
+            )
             return
 
         await asyncio.sleep(HELLO_REPLY_CHECK_INTERVAL_SECONDS)
@@ -217,7 +235,10 @@ def _dispatch_incoming_message(connection_id: int, message: dict[str, Any]) -> N
     try:
         _incoming_message_handler(connection_id, message)
     except Exception:
-        logger.exception('Incoming websocket message handler failed for connection %s.', connection_id)
+        logger.exception(
+            'Incoming websocket message handler failed for connection %s.',
+            connection_id,
+        )
 
 
 def _consume_client_message(payload: str) -> dict[str, Any] | None:

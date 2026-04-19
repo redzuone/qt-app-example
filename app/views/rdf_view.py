@@ -149,7 +149,7 @@ class RDFBearingTimePlot(QWidget):
         if not isinstance(data, dict):
             return
         self._hover_label.setText(
-            f"Freq {data['freq_label']} | Bearing {data['bearing']:.1f}° | Time {data['time']}"
+            f'Freq {data["freq_label"]} | Bearing {data["bearing"]:.1f}° | Time {data["time"]}'
         )
 
     def update_data(self, payload: dict[str, Any]) -> None:
@@ -158,7 +158,7 @@ class RDFBearingTimePlot(QWidget):
         try:
             freq_hz = float(payload[SCHEMA.FREQUENCY])
             bearing = float(payload[SCHEMA.BEARING])
-        except (KeyError, TypeError, ValueError):
+        except KeyError, TypeError, ValueError:
             return
 
         datetime_raw = payload.get(SCHEMA.DATETIME)
@@ -172,11 +172,15 @@ class RDFBearingTimePlot(QWidget):
 
         self._times_by_freq[freq_hz].append(ts)
         self._bearings_by_freq[freq_hz].append(bearing)
-        self._meta_by_freq[freq_hz].append({
-            'freq_label': self._format_freq_label(freq_hz),
-            'bearing': bearing,
-            'time': datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S.%f')[:-3],
-        })
+        self._meta_by_freq[freq_hz].append(
+            {
+                'freq_label': self._format_freq_label(freq_hz),
+                'bearing': bearing,
+                'time': datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S.%f')[
+                    :-3
+                ],
+            }
+        )
 
         series = self._series_by_freq.get(freq_hz)
         if series is None:
@@ -187,13 +191,15 @@ class RDFBearingTimePlot(QWidget):
         metadata = self._meta_by_freq[freq_hz]
 
         series['line_item'].setData(times, bearings)
-        series['scatter_item'].setData([
-            {'pos': (t, b), 'data': m}
-            for t, b, m in zip(times, bearings, metadata, strict=False)
-        ])
+        series['scatter_item'].setData(
+            [
+                {'pos': (t, b), 'data': m}
+                for t, b, m in zip(times, bearings, metadata, strict=False)
+            ]
+        )
 
         self._last_updated_label.setText(
-            f"Last RX: {datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S')}"
+            f'Last RX: {datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M:%S")}'
         )
 
     def clear(self) -> None:
@@ -254,7 +260,7 @@ class RdfView(QWidget):
     def update_rdf_data(self, payload: dict[str, Any]) -> None:
         try:
             station_id = int(payload[SCHEMA.STATION_ID])
-        except (KeyError, TypeError, ValueError):
+        except KeyError, TypeError, ValueError:
             return
         tab = self._station_tabs.get(station_id)
         if tab is not None:

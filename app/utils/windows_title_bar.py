@@ -76,7 +76,7 @@ def _get_hwnd(window: QWidget) -> int | None:
     try:
         win_id = window.winId()
         return int(win_id)
-    except (AttributeError, TypeError, ValueError):
+    except AttributeError, TypeError, ValueError:
         pass
 
     return None

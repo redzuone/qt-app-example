@@ -1,4 +1,4 @@
-exclude: '(^|/)\.vscode/|^requirements\.txt$'
+exclude: '(^|/)\.vscode/|^requirements\.txt$|\.svg$|\.md$|^\.gitignore$'
 
 repos:
 - repo: https://github.com/pre-commit/pre-commit-hooks

@@ -21,6 +21,7 @@ from app.views.waterfall_view import WaterfallView
 
 class MainWindow(QMainWindow):
     """Main application window."""
+
     debug_action = Signal(str)
     settings_requested = Signal()
     trail_full_trail_toggled = Signal(bool)
@@ -79,9 +80,15 @@ class MainWindow(QMainWindow):
         view_menu = self.menu_bar.addMenu('View')
         view_menu.addAction('Table', lambda: self._toggle_visibility(self.table_view))
         view_menu.addAction('Tree', lambda: self._toggle_visibility(self.tree_view))
-        view_menu.addAction('Spectrum', lambda: self._toggle_visibility(self.spectrum_view))
-        view_menu.addAction('Waterfall', lambda: self._toggle_visibility(self.waterfall_view))
-        view_menu.addAction('RDF Bearing-Time', lambda: self._toggle_visibility(self.rdf_view))
+        view_menu.addAction(
+            'Spectrum', lambda: self._toggle_visibility(self.spectrum_view)
+        )
+        view_menu.addAction(
+            'Waterfall', lambda: self._toggle_visibility(self.waterfall_view)
+        )
+        view_menu.addAction(
+            'RDF Bearing-Time', lambda: self._toggle_visibility(self.rdf_view)
+        )
         map_submenu = view_menu.addMenu('Map')
 
         self._target_labels_action = QAction('Target Labels', self)
@@ -105,13 +112,19 @@ class MainWindow(QMainWindow):
 
         debug_menu = self.menu_bar.addMenu('Debug')
         self.simulator_action = QAction('Show Simulator', self)
-        self.simulator_action.triggered.connect(lambda: self._show_view(self.simulator_view))
+        self.simulator_action.triggered.connect(
+            lambda: self._show_view(self.simulator_view)
+        )
 
         debug_menu.addAction(self.simulator_action)
 
         map_submenu = debug_menu.addMenu('Map')
-        map_submenu.addAction('Leaflet map', lambda: self.debug_action.emit('show_leaflet_map'))
-        map_submenu.addAction('Maplibre map', lambda: self.debug_action.emit('show_maplibre_map'))
+        map_submenu.addAction(
+            'Leaflet map', lambda: self.debug_action.emit('show_leaflet_map')
+        )
+        map_submenu.addAction(
+            'Maplibre map', lambda: self.debug_action.emit('show_maplibre_map')
+        )
 
     def _show_view(self, view: QWidget) -> None:
         view.showNormal()
@@ -140,8 +153,12 @@ class MainWindow(QMainWindow):
             self._settings.setValue('main_window/size', self.size())
 
         self._settings.setValue('main_window/is_maximized', self.isMaximized())
-        self._settings.setValue('main_window/main_splitter_state', self._main_splitter.saveState())
-        self._settings.setValue('main_window/left_splitter_state', self._left_splitter.saveState())
+        self._settings.setValue(
+            'main_window/main_splitter_state', self._main_splitter.saveState()
+        )
+        self._settings.setValue(
+            'main_window/left_splitter_state', self._left_splitter.saveState()
+        )
         self._settings.sync()
 
     def _restore_window_settings(self) -> None:
@@ -149,7 +166,9 @@ class MainWindow(QMainWindow):
         if isinstance(saved_size, QSize) and saved_size.isValid():
             self.resize(saved_size)
 
-        is_maximized = self._settings.value('main_window/is_maximized', False, type=bool)
+        is_maximized = self._settings.value(
+            'main_window/is_maximized', False, type=bool
+        )
         if is_maximized:
             self.showMaximized()
 
@@ -157,14 +176,20 @@ class MainWindow(QMainWindow):
             'main_window/main_splitter_state',
             type=QByteArray,
         )
-        if isinstance(main_splitter_state, QByteArray) and not main_splitter_state.isEmpty():
+        if (
+            isinstance(main_splitter_state, QByteArray)
+            and not main_splitter_state.isEmpty()
+        ):
             self._main_splitter.restoreState(main_splitter_state)
 
         left_splitter_state = self._settings.value(
             'main_window/left_splitter_state',
             type=QByteArray,
         )
-        if isinstance(left_splitter_state, QByteArray) and not left_splitter_state.isEmpty():
+        if (
+            isinstance(left_splitter_state, QByteArray)
+            and not left_splitter_state.isEmpty()
+        ):
             self._left_splitter.restoreState(left_splitter_state)
 
     def _create_status_bar(self) -> None:
