@@ -75,6 +75,15 @@ class AppController:
             lambda target_id: simulator_view.set_target_running(target_id, False)
         )
         simulator_service.new_raw_data.connect(self._handle_raw_data)
+        simulator_view.spectrum_start_requested.connect(simulator_service.start_spectrum)
+        simulator_view.spectrum_stop_requested.connect(simulator_service.stop_spectrum)
+        simulator_view.spectrum_station_changed.connect(simulator_service.set_spectrum_station_id)
+        simulator_service.new_spectrum_data.connect(
+            self._view.spectrum_view.update_spectrum
+        )
+        simulator_service.new_spectrum_data.connect(
+            self._view.waterfall_view.update_waterfall
+        )
 
     def _connect_rdf(self) -> None:
         rdf_service = self._rdf_service
@@ -84,6 +93,7 @@ class AppController:
         simulator_view = self._view.simulator_view
         simulator_view.rdf_send_requested.connect(rdf_service.submit_report)
         rdf_service.rdf_report_received.connect(self._handle_rdf_report)
+        rdf_service.rdf_report_received.connect(self._view.rdf_view.update_rdf_data)
         rdf_service.triangulated_fix_ready.connect(self._handle_raw_data)
         self._apply_rdf_settings_to_service()
 

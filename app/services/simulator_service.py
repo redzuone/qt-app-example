@@ -4,9 +4,67 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
+import numpy as np
 from PySide6.QtCore import QObject, QTimer, Signal, Slot
 
 from app.constants.data_schema import SCHEMA
+
+
+class SpectrumSimulatorService(QObject):
+    """Generates dummy RF spectrum data at regular intervals.
+
+    Emits ``new_spectrum_data`` as a 3-tuple ``(station_id, freq_ghz, power_dbm)``
+    where both arrays have shape ``(51,)`` matching ``_freq_axis``.
+    Missing bins are represented as ``np.nan``; this simulator always emits
+    fully valid arrays (no NaN values).
+    """
+
+    new_spectrum_data = Signal(tuple)  # tuple[int, np.ndarray, np.ndarray]
+
+    _BINS = 51
+
+    def __init__(self, interval_ms: int = 90) -> None:
+        super().__init__()
+        self._tick = 0
+        self._station_id: int = 1
+        # Values in GHz: 0.6, 0.7, ..., 5.6  (51 bins, 100 MHz step)
+        self._freq_axis: np.ndarray = np.arange(51, dtype=np.float32) * 0.1 + 0.6
+        self._timer = QTimer(self)
+        self._timer.setInterval(max(20, interval_ms))
+        self._timer.timeout.connect(self._on_tick)
+
+    def start(self) -> None:
+        self._timer.start()
+
+    def stop(self) -> None:
+        self._timer.stop()
+
+    def set_station_id(self, station_id: int) -> None:
+        self._station_id = station_id
+
+    def _on_tick(self) -> None:
+        self._tick += 1
+        tick = self._tick
+        bins = self._BINS
+        bin_arr = np.arange(bins, dtype=np.float32)
+
+        base = -90.0 + 3.0 * math.sin(tick * 0.07)
+        noise = np.random.normal(0.0, 1.5, bins).astype(np.float32)
+        ripple = 2.5 * np.sin(
+            np.linspace(0.0, math.pi * 5.0, bins, dtype=np.float32) + tick * 0.04
+        )
+
+        # Two carriers drifting within the 0.6–5.6 GHz band.
+        # Bin 18 ≈ 2.4 GHz, bin 34 ≈ 4.0 GHz.
+        center_1 = 18 + int(6 * math.sin(tick * 0.04))
+        center_2 = 34 + int(8 * math.cos(tick * 0.05))
+        carrier_1 = 32.0 * np.exp(-0.5 * ((bin_arr - center_1) / 2.5) ** 2)
+        carrier_2 = 24.0 * np.exp(-0.5 * ((bin_arr - center_2) / 3.5) ** 2)
+
+        power = base + noise + ripple + carrier_1 + carrier_2
+        power = np.clip(power, -120.0, -20.0).astype(np.float32)
+
+        self.new_spectrum_data.emit((self._station_id, self._freq_axis, power))
 
 
 @dataclass
@@ -28,6 +86,7 @@ class SimulatorService(QObject):
 	new_raw_data = Signal(dict)
 	simulation_started = Signal(int)
 	simulation_stopped = Signal(int)
+	new_spectrum_data = Signal(tuple)
 
 	def __init__(self, interval_ms: int = 1000) -> None:
 		super().__init__()
@@ -36,6 +95,8 @@ class SimulatorService(QObject):
 		self._timer = QTimer(self)
 		self._timer.setInterval(interval_ms)
 		self._timer.timeout.connect(self._emit_for_targets)
+		self._spectrum_service = SpectrumSimulatorService()
+		self._spectrum_service.new_spectrum_data.connect(self.new_spectrum_data)
 
 	@Slot(dict)
 	def start_simulation(self, target_data: dict[str, Any]) -> None:
@@ -88,6 +149,15 @@ class SimulatorService(QObject):
 		self.simulation_stopped.emit(int(target_id))
 		if not self._targets and self._timer.isActive():
 			self._timer.stop()
+
+	def start_spectrum(self) -> None:
+		self._spectrum_service.start()
+
+	def stop_spectrum(self) -> None:
+		self._spectrum_service.stop()
+
+	def set_spectrum_station_id(self, station_id: int) -> None:
+		self._spectrum_service.set_station_id(station_id)
 
 	def stop_all(self) -> None:
 		target_ids = list(self._targets.keys())
