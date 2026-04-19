@@ -77,6 +77,7 @@ class AppController:
         simulator_service.new_raw_data.connect(self._handle_raw_data)
         simulator_view.spectrum_start_requested.connect(simulator_service.start_spectrum)
         simulator_view.spectrum_stop_requested.connect(simulator_service.stop_spectrum)
+        simulator_view.spectrum_station_changed.connect(simulator_service.set_spectrum_station_id)
         simulator_service.new_spectrum_data.connect(
             self._view.spectrum_view.update_spectrum
         )

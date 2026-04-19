@@ -182,6 +182,7 @@ class SimulatorView(QWidget):
 	visibility_changed = Signal(bool)
 	spectrum_start_requested = Signal()
 	spectrum_stop_requested = Signal()
+	spectrum_station_changed = Signal(int)
 
 	def __init__(self, settings: QSettings, parent: QWidget | None = None) -> None:
 		super().__init__(parent, Qt.WindowType.Window)
@@ -212,8 +213,14 @@ class SimulatorView(QWidget):
 		self._spectrum_button = QPushButton('Start')
 		self._spectrum_button.setCheckable(True)
 		self._spectrum_button.clicked.connect(self._on_spectrum_toggle)
+		self._station_combo = QComboBox()
+		self._station_combo.addItems(['Station 1', 'Station 2'])
+		self._station_combo.currentIndexChanged.connect(
+			lambda idx: self.spectrum_station_changed.emit(idx + 1)
+		)
 		spectrum_row = QHBoxLayout()
 		spectrum_row.addWidget(QLabel('Spectrum Simulator', self))
+		spectrum_row.addWidget(self._station_combo)
 		spectrum_row.addWidget(self._spectrum_button)
 		layout.addLayout(spectrum_row)
 

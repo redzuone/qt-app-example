@@ -1,12 +1,16 @@
+from typing import Any
+
 import numpy as np
 import pyqtgraph as pg  # type: ignore
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QTransform
-from PySide6.QtWidgets import QVBoxLayout, QWidget
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QCloseEvent, QTransform
+from PySide6.QtWidgets import QHBoxLayout, QPushButton, QSizePolicy, QTabWidget, QVBoxLayout, QWidget
+
+from app.views._detachable_tab import DetachableTab
 
 
-class WaterfallView(QWidget):
-	"""RF waterfall display.
+class WaterfallPlot(QWidget):
+	"""RF waterfall display intended to live inside a :class:`DetachableTab`.
 
 	Accepts ``(freq_ghz, power_dbm)`` tuples via :meth:`update_waterfall`.
 	Missing bins should be ``np.nan``; they map to the darkest colormap colour,
@@ -16,17 +20,29 @@ class WaterfallView(QWidget):
 	the view adapts to whatever frequency grid arrives.
 	"""
 
+	pop_requested = Signal()
+
 	_HISTORY = 180
 	_POWER_MIN = -120.0
 	_POWER_MAX = -20.0
 
-	def __init__(self, parent: QWidget | None = None) -> None:
-		super().__init__(parent, Qt.WindowType.Window)
-		self.setWindowTitle('Waterfall')
-		self.resize(640, 480)
+	def __init__(self) -> None:
+		super().__init__()
 
 		self._bins: int | None = None
 		self._waterfall_data: np.ndarray | None = None
+
+		# Controls row
+		controls = QHBoxLayout()
+		controls.setContentsMargins(0, 0, 0, 0)
+		controls.setSpacing(4)
+
+		self._pop_btn = QPushButton('Pop Out')
+		self._pop_btn.setCheckable(True)
+		self._pop_btn.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+		self._pop_btn.clicked.connect(self.pop_requested)
+		controls.addStretch(1)
+		controls.addWidget(self._pop_btn)
 
 		self._plot = pg.PlotWidget()
 		self._plot.showGrid(x=False, y=False)
@@ -46,7 +62,12 @@ class WaterfallView(QWidget):
 
 		layout = QVBoxLayout(self)
 		layout.setContentsMargins(4, 4, 4, 4)
+		layout.addLayout(controls)
 		layout.addWidget(self._plot)
+
+	def set_popped_out(self, popped: bool) -> None:
+		self._pop_btn.setChecked(popped)
+		self._pop_btn.setText('Pop In' if popped else 'Pop Out')
 
 	def _init_buffer(self, bins: int, freq_min_ghz: float, freq_max_ghz: float) -> None:
 		"""(Re-)initialise the history buffer and image transform for *bins* bins."""
@@ -81,3 +102,51 @@ class WaterfallView(QWidget):
 		self._waterfall_data = np.roll(self._waterfall_data, -1, axis=0)
 		self._waterfall_data[-1, :] = power_dbm
 		self._image.setImage(self._waterfall_data, autoLevels=False)
+
+
+class _WaterfallStationTab(DetachableTab):
+	def __init__(self, station_id: int) -> None:
+		plot = WaterfallPlot()
+		super().__init__(
+			content=plot,
+			window_title=f'Waterfall — Station {station_id}',
+			placeholder_text=f'Station {station_id} waterfall is shown in a separate window.',
+		)
+		self._plot = plot
+
+	def update_waterfall(self, data: tuple[np.ndarray, np.ndarray]) -> None:
+		self._plot.update_waterfall(data)
+
+
+class WaterfallView(QWidget):
+	"""RF waterfall display with per-station tabs and detachable plots."""
+
+	def __init__(self, parent: QWidget | None = None) -> None:
+		super().__init__(parent, Qt.WindowType.Window)
+		self.setWindowTitle('Waterfall')
+		self.resize(640, 480)
+
+		self._tabs = QTabWidget()
+		self._tabs.setTabPosition(QTabWidget.TabPosition.West)
+
+		self._station_tabs: dict[int, _WaterfallStationTab] = {}
+		for station_id in (1, 2):
+			tab = _WaterfallStationTab(station_id=station_id)
+			self._station_tabs[station_id] = tab
+			self._tabs.addTab(tab, f'Station {station_id}')
+
+		layout = QVBoxLayout(self)
+		layout.setContentsMargins(0, 0, 0, 0)
+		layout.addWidget(self._tabs)
+
+	def update_waterfall(self, data: tuple[Any, np.ndarray, np.ndarray]) -> None:
+		station_id, freq_ghz, power_dbm = data
+		tab = self._station_tabs.get(int(station_id))
+		if tab is not None:
+			tab.update_waterfall((freq_ghz, power_dbm))
+
+	def closeEvent(self, event: QCloseEvent) -> None:
+		for tab in self._station_tabs.values():
+			tab._pop_in()
+		event.ignore()
+		self.hide()

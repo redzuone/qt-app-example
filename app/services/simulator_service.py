@@ -13,23 +13,22 @@ from app.constants.data_schema import SCHEMA
 class SpectrumSimulatorService(QObject):
     """Generates dummy RF spectrum data at regular intervals.
 
-    Emits ``new_spectrum_data`` as a tuple ``(freq_ghz, power_dbm)`` where
-    both arrays have shape ``(51,)`` matching ``_freq_axis``.
+    Emits ``new_spectrum_data`` as a 3-tuple ``(station_id, freq_ghz, power_dbm)``
+    where both arrays have shape ``(51,)`` matching ``_freq_axis``.
     Missing bins are represented as ``np.nan``; this simulator always emits
     fully valid arrays (no NaN values).
     """
 
-    new_spectrum_data = Signal(tuple)  # tuple[np.ndarray, np.ndarray]
+    new_spectrum_data = Signal(tuple)  # tuple[int, np.ndarray, np.ndarray]
 
     _BINS = 51
 
     def __init__(self, interval_ms: int = 90) -> None:
         super().__init__()
         self._tick = 0
-		# Values in GHz: 0.6, 0.7, ..., 5.6  (51 bins, 100 MHz step)
-        self._freq_axis: np.ndarray = (
-			np.arange(51, dtype=np.float32) * 0.1 + 0.6
-		)
+        self._station_id: int = 1
+        # Values in GHz: 0.6, 0.7, ..., 5.6  (51 bins, 100 MHz step)
+        self._freq_axis: np.ndarray = np.arange(51, dtype=np.float32) * 0.1 + 0.6
         self._timer = QTimer(self)
         self._timer.setInterval(max(20, interval_ms))
         self._timer.timeout.connect(self._on_tick)
@@ -39,6 +38,9 @@ class SpectrumSimulatorService(QObject):
 
     def stop(self) -> None:
         self._timer.stop()
+
+    def set_station_id(self, station_id: int) -> None:
+        self._station_id = station_id
 
     def _on_tick(self) -> None:
         self._tick += 1
@@ -62,7 +64,7 @@ class SpectrumSimulatorService(QObject):
         power = base + noise + ripple + carrier_1 + carrier_2
         power = np.clip(power, -120.0, -20.0).astype(np.float32)
 
-        self.new_spectrum_data.emit((self._freq_axis, power))
+        self.new_spectrum_data.emit((self._station_id, self._freq_axis, power))
 
 
 @dataclass
@@ -153,6 +155,9 @@ class SimulatorService(QObject):
 
 	def stop_spectrum(self) -> None:
 		self._spectrum_service.stop()
+
+	def set_spectrum_station_id(self, station_id: int) -> None:
+		self._spectrum_service.set_station_id(station_id)
 
 	def stop_all(self) -> None:
 		target_ids = list(self._targets.keys())

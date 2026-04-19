@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import Any
 
 import pyqtgraph as pg  # type: ignore
-from PySide6.QtCore import QEvent, QObject, Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import (
     QHBoxLayout,
@@ -17,9 +17,12 @@ from PySide6.QtWidgets import (
 
 from app.constants.data_schema import SCHEMA
 from app.utils.target_color import _TARGET_COLORS
+from app.views._detachable_tab import DetachableTab
 
 
 class RDFBearingTimePlot(QWidget):
+    pop_requested = Signal()
+
     def __init__(self, title: str) -> None:
         super().__init__()
         self._title = title
@@ -56,6 +59,7 @@ class RDFBearingTimePlot(QWidget):
         self._pop_btn = QPushButton('Pop Out')
         self._pop_btn.setCheckable(True)
         self._pop_btn.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        self._pop_btn.clicked.connect(self.pop_requested)
         controls.addWidget(self._pop_btn)
 
         layout.addLayout(controls)
@@ -208,91 +212,16 @@ class RDFBearingTimePlot(QWidget):
         self._legend_btn.setText('Hide Legend' if was_legend_visible else 'Show Legend')
 
 
-class _PopupCloseFilter(QObject):
-    """Event filter that intercepts close on popup window and calls pop_in instead."""
-
-    def __init__(self, tab: _RdfStationTab) -> None:
-        super().__init__(tab)
-        self._tab = tab
-
-    def eventFilter(self, obj: QObject, event: QEvent) -> bool:
-        if event.type() == QEvent.Type.Close:
-            self._tab._pop_in()
-            return True
-        return super().eventFilter(obj, event)
-
-
-class _RdfStationTab(QWidget):
+class _RdfStationTab(DetachableTab):
     def __init__(self, station_id: int) -> None:
-        super().__init__()
+        plot = RDFBearingTimePlot(title=f'RDF Station {station_id}')
+        super().__init__(
+            content=plot,
+            window_title=f'RDF Station {station_id} — Bearing vs Time',
+            placeholder_text=f'Station {station_id} plot is shown in a separate window.',
+        )
         self._station_id = station_id
-        self._popup: QWidget | None = None
-        self._close_filter: _PopupCloseFilter | None = None
-
-        self._plot = RDFBearingTimePlot(title=f'RDF Station {station_id}')
-        self._plot._pop_btn.clicked.connect(self._toggle_pop)
-
-        self._embed_container = QWidget()
-        embed_layout = QVBoxLayout(self._embed_container)
-        embed_layout.setContentsMargins(0, 0, 0, 0)
-        embed_layout.addWidget(self._plot)
-
-        self._placeholder = QLabel(f'Station {station_id} plot is shown in a separate window.')
-        self._placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._placeholder.hide()
-
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.addWidget(self._embed_container)
-        layout.addWidget(self._placeholder)
-
-    def _toggle_pop(self) -> None:
-        if self._popup is None:
-            self._pop_out()
-        else:
-            self._pop_in()
-
-    def _pop_out(self) -> None:
-        popup = QWidget(None, Qt.WindowType.Window)
-        popup.setWindowTitle(f'RDF Station {self._station_id} — Bearing vs Time')
-        popup.resize(640, 480)
-
-        popup_layout = QVBoxLayout(popup)
-        popup_layout.setContentsMargins(4, 4, 4, 4)
-
-        self._plot.setParent(popup)
-        popup_layout.addWidget(self._plot)
-
-        self._close_filter = _PopupCloseFilter(self)
-        popup.installEventFilter(self._close_filter)
-
-        self._popup = popup
-        self._embed_container.hide()
-        self._placeholder.show()
-        self._plot.set_popped_out(True)
-        popup.show()
-
-    def _pop_in(self) -> None:
-        if self._popup is None:
-            return
-
-        popup = self._popup
-        if self._close_filter is not None:
-            popup.removeEventFilter(self._close_filter)
-            self._close_filter = None
-
-        self._plot.setParent(self._embed_container)
-        embed_layout = self._embed_container.layout()
-        if embed_layout is not None:
-            embed_layout.addWidget(self._plot)
-        self._plot.show()
-
-        self._popup = None
-        popup.close()
-
-        self._embed_container.show()
-        self._placeholder.hide()
-        self._plot.set_popped_out(False)
+        self._plot = plot
 
     def update_data(self, payload: dict[str, Any]) -> None:
         self._plot.update_data(payload)
