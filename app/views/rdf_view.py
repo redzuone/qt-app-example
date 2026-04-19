@@ -51,6 +51,10 @@ class RDFBearingTimePlot(QWidget):
         self._legend_btn = QPushButton('Show Legend')
         controls.addWidget(self._legend_btn)
 
+        self._hold_btn = QPushButton('Hold')
+        self._hold_btn.setCheckable(True)
+        controls.addWidget(self._hold_btn)
+
         controls.addStretch(1)
 
         self._last_updated_label = QLabel()
@@ -149,6 +153,8 @@ class RDFBearingTimePlot(QWidget):
         )
 
     def update_data(self, payload: dict[str, Any]) -> None:
+        if self._hold_btn.isChecked():
+            return
         try:
             freq_hz = float(payload[SCHEMA.FREQUENCY])
             bearing = float(payload[SCHEMA.BEARING])

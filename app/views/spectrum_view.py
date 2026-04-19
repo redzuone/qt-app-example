@@ -29,6 +29,10 @@ class SpectrumPlot(QWidget):
 		controls.setContentsMargins(0, 0, 0, 0)
 		controls.setSpacing(4)
 
+		self._hold_btn = QPushButton('Hold')
+		self._hold_btn.setCheckable(True)
+		controls.addWidget(self._hold_btn)
+
 		self._pop_btn = QPushButton('Pop Out')
 		self._pop_btn.setCheckable(True)
 		self._pop_btn.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
@@ -60,6 +64,8 @@ class SpectrumPlot(QWidget):
 		self._pop_btn.setText('Pop In' if popped else 'Pop Out')
 
 	def update_spectrum(self, data: tuple[np.ndarray, np.ndarray]) -> None:
+		if self._hold_btn.isChecked():
+			return
 		freq_ghz, power_dbm = data
 		self._curve.setData(freq_ghz, power_dbm)
 
