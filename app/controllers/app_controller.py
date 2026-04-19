@@ -75,6 +75,14 @@ class AppController:
             lambda target_id: simulator_view.set_target_running(target_id, False)
         )
         simulator_service.new_raw_data.connect(self._handle_raw_data)
+        simulator_view.spectrum_start_requested.connect(simulator_service.start_spectrum)
+        simulator_view.spectrum_stop_requested.connect(simulator_service.stop_spectrum)
+        simulator_service.new_spectrum_data.connect(
+            self._view.spectrum_view.update_spectrum
+        )
+        simulator_service.new_spectrum_data.connect(
+            self._view.waterfall_view.update_waterfall
+        )
 
     def _connect_rdf(self) -> None:
         rdf_service = self._rdf_service

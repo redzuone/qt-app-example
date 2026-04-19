@@ -180,6 +180,8 @@ class SimulatorView(QWidget):
 	stop_all_simulation_requested = Signal()
 	rdf_send_requested = Signal(dict)
 	visibility_changed = Signal(bool)
+	spectrum_start_requested = Signal()
+	spectrum_stop_requested = Signal()
 
 	def __init__(self, settings: QSettings, parent: QWidget | None = None) -> None:
 		super().__init__(parent, Qt.WindowType.Window)
@@ -207,6 +209,14 @@ class SimulatorView(QWidget):
 		multi_row.addWidget(self._stop_all_button)
 		layout.addLayout(multi_row)
 
+		self._spectrum_button = QPushButton('Start')
+		self._spectrum_button.setCheckable(True)
+		self._spectrum_button.clicked.connect(self._on_spectrum_toggle)
+		spectrum_row = QHBoxLayout()
+		spectrum_row.addWidget(QLabel('Spectrum Simulator', self))
+		spectrum_row.addWidget(self._spectrum_button)
+		layout.addLayout(spectrum_row)
+
 		self.target_sections: list[TargetSection] = [
 			TargetSection(title='Target 1', default_target_id=1),
 			TargetSection(title='Target 2', default_target_id=2),
@@ -231,6 +241,14 @@ class SimulatorView(QWidget):
 	def _on_start_requested(self, target_data: dict[str, Any]) -> None:
 		self._save_recent_coordinates(target_data)
 		self.start_simulation_requested.emit(target_data)
+
+	def _on_spectrum_toggle(self) -> None:
+		if self._spectrum_button.isChecked():
+			self._spectrum_button.setText('Stop')
+			self.spectrum_start_requested.emit()
+		else:
+			self._spectrum_button.setText('Start')
+			self.spectrum_stop_requested.emit()
 
 	def _on_simulate_multiple(self) -> None:
 		count = self._simulate_multiple_count.value()
